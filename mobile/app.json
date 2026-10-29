@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "NorrisBeauty",
+    "slug": "norrisbeauty",
+    "scheme": "norrisbeauty",
+    "plugins": [
+      "expo-router"
+    ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.norrisbeauty.app"
+    }
+  }
+}

@@ -1,0 +1,3 @@
+# Copilot project instructions — NorrisBeauty
+
+Read README.md and all docs before modifying code. Implement only the approved phase. Python/Django business logic must be shared by Bootstrap web and Expo mobile clients through a versioned API. Prefer simple maintainable code, explicit permissions, atomic inventory/payment operations and complete tests. No speculative features, fabricated data or invented test results. Do not alter already passing functionality without a regression test. Every change requires updated docs, real verification commands/results, screenshots for UI changes, and a phase verification report. Design must follow design/DESIGN_SYSTEM.md. Stop if a test fails or requirements conflict.
