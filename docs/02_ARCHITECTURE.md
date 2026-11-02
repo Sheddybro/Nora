@@ -15,6 +15,8 @@ backend/config, backend/apps/{accounts,organizations,catalog,inventory,purchasin
 - Prefer explicit APIs with version prefix /api/v1/.
 - Keep money in Decimal fields; capture immutable price/cost snapshots on transaction lines.
 - Offline writes require client-generated idempotency keys, server reconciliation and visible conflict states. Do not claim offline mode works without end-to-end tests.
+- Catalog and inventory reads/writes use `/api/v1/` for both browser sessions (CSRF-protected) and mobile JWTs. Derive business scope from the server-validated membership; never accept a client business ID as authority.
+- Inventory cost is weighted-average per variant. Batch quantity and immutable stock movement records are updated atomically; negative batch balances are rejected. Revisit the cost method only with an approved migration and reconciliation plan.
 
 ## Data model candidates
 Business, Membership, User, Product, ProductVariant, Category, ProductImage, StockLocation, Batch, StockMovement, InventoryBalance, Supplier, PurchaseOrder, PurchaseLine, Customer, Sale, SaleLine, Payment, Refund, Transfer, Adjustment, Expense, AuditEvent, Notification.

@@ -2,9 +2,12 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
+from django.db.models import Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from .models import Batch, Category, Product, ProductVariant, StockLocation
+from .permissions import WEB_PAGE_PERMISSIONS, membership_has_permission, membership_permissions
 
 WORKSPACE_PAGES = {
 	'products': {
@@ -99,9 +102,6 @@ WORKSPACE_PAGES = {
 	},
 }
 
-STAFF_PAGE_ALLOWLIST = {'products', 'inventory', 'pos', 'sales', 'customers'}
-
-
 @require_GET
 def health(request):
 	return JsonResponse({'status': 'ok', 'service': 'norrisbeauty'})
@@ -114,9 +114,14 @@ def api_health(request):
 
 
 def _workspace_context(request, page_key='dashboard'):
-	membership = request.user.business_memberships.select_related('business').first()
+	memberships = request.user.business_memberships.select_related('business').order_by('id')
+	active_membership_id = request.session.get('active_membership_id')
+	membership = memberships.filter(pk=active_membership_id).first() if active_membership_id else None
+	if membership is None:
+		membership = memberships.first()
 	role = membership.role if membership else None
-	owner = role == 'owner'
+	owner = bool(membership and membership.role == 'owner')
+	permissions = membership_permissions(membership)
 	navigation = [
 		('dashboard', 'Overview', '◫'), ('products', 'Products', '▧'),
 		('inventory', 'Inventory', '▤'), ('pos', 'Point of sale', '＋'),
@@ -124,7 +129,10 @@ def _workspace_context(request, page_key='dashboard'):
 		('customers', 'Customers', '◎'), ('reports', 'Reports', '▥'),
 		('staff', 'Staff', '♙'), ('settings', 'Settings', '⚙'),
 	]
-	visible_navigation = [item for item in navigation if owner or item[0] == 'dashboard' or item[0] in STAFF_PAGE_ALLOWLIST]
+	visible_navigation = [
+		item for item in navigation
+		if item[0] == 'dashboard' or owner or membership_has_permission(membership, WEB_PAGE_PERMISSIONS[item[0]])
+	]
 	return {
 		'membership': membership,
 		'role': role,
@@ -133,6 +141,12 @@ def _workspace_context(request, page_key='dashboard'):
 		'active_page': page_key,
 		'display_name': request.user.first_name or request.user.username,
 		'demo_workspace': True,
+		'permission_codes': sorted(permissions),
+		'can_use_pos': 'pos.use' in permissions,
+		'can_view_catalog': 'catalog.view' in permissions,
+		'can_view_inventory': 'inventory.view' in permissions,
+		'can_view_sales': 'sales.view' in permissions,
+		'can_view_customers': 'customers.view' in permissions,
 		'chart_bars': [('Mon', 42, 48, 39), ('Tue', 66, 55, 62), ('Wed', 51, 72, 58), ('Thu', 78, 64, 74), ('Fri', 60, 83, 68), ('Sat', 92, 76, 96), ('Sun', 71, 88, 82)],
 	}
 
@@ -149,7 +163,30 @@ def workspace_page(request, page_key):
 	if page is None:
 		return HttpResponseForbidden('This workspace page is not available.')
 	context = _workspace_context(request, page_key)
-	if not context['is_owner'] and page_key not in STAFF_PAGE_ALLOWLIST:
+	permission_code = WEB_PAGE_PERMISSIONS.get(page_key)
+	if not context['membership'] or (permission_code and not membership_has_permission(context['membership'], permission_code)):
 		return HttpResponseForbidden('Owner access is required for this workspace page.')
+	page = dict(page)
+	if page_key == 'products':
+		products = Product.objects.filter(business=context['membership'].business, is_active=True).select_related('category').prefetch_related('variants')
+		page['metrics'] = [
+			('Active products', str(products.count()), 'Live catalog'),
+			('Categories', str(Category.objects.filter(business=context['membership'].business).count()), 'Live catalog'),
+			('Variants', str(ProductVariant.objects.filter(business=context['membership'].business, is_active=True).count()), 'Live catalog'),
+		]
+		page['rows'] = [[product.name, product.category.name if product.category_id else 'Uncategorized', ', '.join(variant.sku for variant in product.variants.all()) or 'No variants', ', '.join(f'₦{variant.price:,.2f}' for variant in product.variants.all()) or '—', 'Active'] for product in products]
+		page['empty'] = 'No products have been created yet.'
+		context['demo_workspace'] = False
+	elif page_key == 'inventory':
+		business = context['membership'].business
+		stock = Batch.objects.filter(business=business).values('variant_id', 'variant__sku', 'variant__name', 'variant__product__name', 'variant__reorder_point', 'variant__unit_cost', 'location__name').annotate(quantity=Sum('quantity_on_hand')).order_by('variant__product__name', 'location__name')
+		rows = list(stock)
+		units = sum(row['quantity'] or 0 for row in rows)
+		low_stock = sum(1 for row in rows if row['variant__reorder_point'] and (row['quantity'] or 0) <= row['variant__reorder_point'])
+		stock_value = sum((row['variant__unit_cost'] or 0) * (row['quantity'] or 0) for row in rows)
+		page['metrics'] = [('Units on hand', str(units), 'Live batch balances'), ('Low stock', str(low_stock), 'At or below reorder point'), ('Stock value', f'₦{stock_value:,.2f}', 'Weighted-average cost')]
+		page['rows'] = [[f"{row['variant__product__name']} · {row['variant__sku']}", row['location__name'], f"{row['quantity'] or 0} units", f"{row['variant__reorder_point']} units", 'Out of stock' if not (row['quantity'] or 0) else 'Reorder' if row['variant__reorder_point'] and (row['quantity'] or 0) <= row['variant__reorder_point'] else 'Healthy'] for row in rows]
+		page['empty'] = 'No stock has been recorded yet.'
+		context['demo_workspace'] = False
 	context['page'] = page
 	return render(request, 'core/workspace.html', context)

@@ -10,12 +10,13 @@
 5. Give Copilot `docs/09_COPILOT_MASTER_HANDOFF.md` and complete phases in order.
 
 ## What's actually implemented
-- Django project configuration; environment-based database settings; DRF health endpoint; user login/logout; business and membership model; branded responsive dashboard shell; CSS dark mode toggle; 5 Django tests.
-- Expo React Native starter UI (not yet wired to API authentication).
+- Django project configuration; environment-based database settings; DRF health endpoint; business and membership model; owner/staff default permissions; secure shared JWT auth flow; password reset routes; branded responsive dashboard shell; CSS dark mode toggle; Django tests for login and permission boundaries.
+- Phase 4 catalog/inventory foundation: business-scoped categories, products, variants, image metadata, locations, expiry batches and stock ledger; authenticated `/api/v1` endpoints; owner-only catalog and stock writes; API-backed web forms and Expo catalog/stock reads.
+- Expo React Native client with secure credential/session storage via Expo SecureStore and a real auth context that consumes the shared Django backend.
 - 15 reference crops + full visual collage; design system; acceptance matrix and prompts.
 
 ## What's not implemented
-Products, stock ledger, POS, purchasing, customers, payments, reporting, offline sync, actual mobile authentication, and production deployment. Do not treat visual placeholders as real metrics.
+Full production tenant provisioning, granular permission configuration UI, supplier purchasing, sales/POS/payment APIs, transfers and stocktakes, offline sync, uploaded image storage, and fully device-tested Expo workflows on a physical Android handset. Dashboard and non-catalog/inventory screens still contain demo-only surfaces until their modules are implemented.
 
 ## Visual samples
 `design/references/` contains generated inspiration images. Some cropped collage samples are low-resolution and small text is illustrative only. `design/references/00_full_design_board.png` is the source image. Rebuild with real UI components.

@@ -63,6 +63,125 @@
 		});
 	});
 
+	const productDialog = document.querySelector('[data-product-dialog]');
+	const stockDialog = document.querySelector('[data-stock-dialog]');
+	document.querySelector('[data-open-product-form]')?.addEventListener('click', () => productDialog?.showModal());
+	document.querySelector('[data-open-stock-form]')?.addEventListener('click', async () => {
+		if (!stockDialog) return;
+		stockDialog.showModal();
+		try {
+			const [catalogResponse, locationResponse] = await Promise.all([
+				fetch('/api/v1/catalog/products/'),
+				fetch('/api/v1/inventory/locations/'),
+			]);
+			if (!catalogResponse.ok || !locationResponse.ok) throw new Error('Could not load catalog and locations.');
+			const catalog = await catalogResponse.json();
+			const locations = await locationResponse.json();
+			const variants = catalog.results.flatMap((product) => product.variants.map((variant) => ({ ...variant, productName: product.name })));
+			const variantSelect = stockDialog.querySelector('[data-stock-variants]');
+			variantSelect.replaceChildren(new Option(variants.length ? 'Choose a variant' : 'Create a product first', ''));
+			variants.forEach((variant) => variantSelect.add(new Option(`${variant.productName} · ${variant.sku}`, variant.id)));
+			const locationSelect = stockDialog.querySelector('[data-stock-locations]');
+			locationSelect.replaceChildren(new Option('Choose a location', ''));
+			locations.results.forEach((location) => locationSelect.add(new Option(location.name, location.id)));
+		} catch (error) {
+			showToast(error.message || 'Could not load stock form options.');
+		}
+	});
+	document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => button.closest('dialog')?.close()));
+
+	const apiPost = async (path, payload, csrfToken) => {
+		const response = await fetch(path, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+			body: JSON.stringify(payload),
+		});
+		const body = response.status === 204 ? null : await response.json();
+		if (!response.ok) throw new Error(body?.error?.message || body?.detail || JSON.stringify(body));
+		return body;
+	};
+
+	document.querySelector('[data-product-form]')?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		const form = event.currentTarget;
+		const fields = new FormData(form);
+		const error = form.querySelector('[data-form-error]');
+		error.hidden = true;
+		try {
+			let categoryId = null;
+			const categoryName = fields.get('category_name').trim();
+			if (categoryName) {
+				const categories = await fetch('/api/v1/catalog/categories/').then((response) => response.json());
+				const existing = categories.results.find((category) => category.name.toLowerCase() === categoryName.toLowerCase());
+				categoryId = existing?.id ?? (await apiPost('/api/v1/catalog/categories/', { name: categoryName }, fields.get('csrfmiddlewaretoken'))).id;
+			}
+			const product = await apiPost('/api/v1/catalog/products/', {
+				name: fields.get('name').trim(),
+				category: categoryId,
+				variants: [{
+					name: fields.get('variant_name').trim() || 'Standard',
+					sku: fields.get('sku').trim(),
+					price: fields.get('price'),
+					unit_cost: fields.get('unit_cost') || null,
+					reorder_point: Number(fields.get('reorder_point')),
+				}],
+			}, fields.get('csrfmiddlewaretoken'));
+			const imageFile = fields.get('image_file');
+			if (imageFile instanceof File && imageFile.size) {
+				const upload = new FormData();
+				upload.append('image', imageFile);
+				upload.append('alt_text', fields.get('alt_text').trim() || fields.get('name').trim());
+				upload.append('is_primary', 'true');
+				const response = await fetch(`/api/v1/catalog/products/${product.id}/images/`, {
+					method: 'POST',
+					headers: { 'X-CSRFToken': fields.get('csrfmiddlewaretoken') },
+					body: upload,
+				});
+				const body = await response.json();
+				if (!response.ok) {
+					await fetch(`/api/v1/catalog/products/${product.id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': fields.get('csrfmiddlewaretoken') } });
+					throw new Error(body?.error?.message || body?.detail || JSON.stringify(body));
+				}
+			}
+			window.location.reload();
+		} catch (requestError) {
+			error.textContent = requestError.message;
+			error.hidden = false;
+		}
+	});
+
+	document.querySelector('[data-stock-form]')?.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		const form = event.currentTarget;
+		const fields = new FormData(form);
+		const error = form.querySelector('[data-form-error]');
+		error.hidden = true;
+		try {
+			let locationId = fields.get('location_id');
+			const newLocation = fields.get('location_name').trim();
+			if (newLocation) locationId = (await apiPost('/api/v1/inventory/locations/', { name: newLocation }, fields.get('csrfmiddlewaretoken'))).id;
+			if (!locationId) throw new Error('Choose or create a stock location.');
+			const payload = {
+				kind: fields.get('kind'),
+				variant_id: Number(fields.get('variant_id')),
+				location_id: Number(locationId),
+				batch_number: fields.get('batch_number').trim(),
+				quantity_delta: Number(fields.get('quantity_delta')),
+				reason: fields.get('reason').trim(),
+				idempotency_key: crypto.randomUUID(),
+			};
+			if (payload.kind === 'receipt') {
+				if (fields.get('expiry_date')) payload.expiry_date = fields.get('expiry_date');
+				if (fields.get('unit_cost')) payload.unit_cost = fields.get('unit_cost');
+			}
+			await apiPost('/api/v1/inventory/movements/', payload, fields.get('csrfmiddlewaretoken'));
+			window.location.reload();
+		} catch (requestError) {
+			error.textContent = requestError.message;
+			error.hidden = false;
+		}
+	});
+
 	document.querySelectorAll('.segment').forEach((button) => {
 		button.addEventListener('click', () => {
 			button.parentElement.querySelectorAll('.segment').forEach((segment) => {

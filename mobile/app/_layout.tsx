@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './components/AuthContext';
 import { MobileRoleContext, type PreviewRole } from './components/MobileRoleContext';
 
 const palette = {
@@ -51,25 +52,46 @@ function MobileTabBar({ state, navigation, role, colors }) {
 	);
 }
 
-export default function Layout() {
+function AppShell() {
 	const scheme = useColorScheme();
 	const colors = scheme === 'dark' ? palette.dark : palette.light;
+	const { session, isLoading } = useAuth();
 	const [role, setRole] = useState<PreviewRole>(process.env.EXPO_PUBLIC_PREVIEW_ROLE === 'staff' ? 'staff' : 'owner');
+
+	useEffect(() => {
+		if (session?.role) {
+			setRole(session.role);
+		}
+	}, [session]);
+
+	if (isLoading) {
+		return null;
+	}
+
+	const effectiveRole = session?.role ?? role;
 
 	return (
 		<SafeAreaProvider>
-			<MobileRoleContext.Provider value={{ role, setRole }}>
-			<Tabs screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }} tabBar={(props) => <MobileTabBar {...props} role={role} colors={colors} />}>
-				<Tabs.Screen name="index" options={{ title: 'Overview' }} />
-				<Tabs.Screen name="catalog" options={{ title: 'Catalog' }} />
-				<Tabs.Screen name="pos" options={{ title: 'Sell' }} />
-				<Tabs.Screen name="inventory" options={{ title: 'Stock' }} />
-				<Tabs.Screen name="customers" options={{ title: 'Guests', href: role === 'staff' ? '/customers' : null }} />
-				<Tabs.Screen name="more" options={{ title: 'More', href: role === 'owner' ? '/more' : null }} />
-				<Tabs.Screen name="login" options={{ title: 'Sign in', href: null }} />
+			<MobileRoleContext.Provider value={{ role: effectiveRole, setRole }}>
+			<Tabs initialRouteName={session ? 'index' : 'login'} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }} tabBar={(props) => <MobileTabBar {...props} role={effectiveRole} colors={colors} />}>
+				<Tabs.Screen name="index" options={{ title: 'Overview', href: session ? '/index' : null }} />
+				<Tabs.Screen name="catalog" options={{ title: 'Catalog', href: session ? '/catalog' : null }} />
+				<Tabs.Screen name="pos" options={{ title: 'Sell', href: session ? '/pos' : null }} />
+				<Tabs.Screen name="inventory" options={{ title: 'Stock', href: session ? '/inventory' : null }} />
+				<Tabs.Screen name="customers" options={{ title: 'Guests', href: session && effectiveRole === 'staff' ? '/customers' : null }} />
+				<Tabs.Screen name="more" options={{ title: 'More', href: session && effectiveRole === 'owner' ? '/more' : null }} />
+				<Tabs.Screen name="login" options={{ title: 'Sign in', href: session ? null : '/login' }} />
 				<Tabs.Screen name="more/[module]" options={{ title: 'Workspace detail', href: null }} />
 			</Tabs>
 			</MobileRoleContext.Provider>
 		</SafeAreaProvider>
+	);
+}
+
+export default function Layout() {
+	return (
+		<AuthProvider>
+			<AppShell />
+		</AuthProvider>
 	);
 }

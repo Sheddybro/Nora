@@ -12,11 +12,11 @@ export function useMobileTheme() {
   return useColorScheme() === 'dark' ? mobileTheme.dark : mobileTheme.light;
 }
 
-type WorkspaceScreenProps = { eyebrow: string; title: string; description: string; children: ReactNode };
+type WorkspaceScreenProps = { eyebrow: string; title: string; description: string; children: ReactNode; liveData?: boolean };
 type WorkspaceRowProps = { icon: string; title: string; detail: string; action?: string; onPress?: () => void };
 type WorkspacePanelProps = { eyebrow?: string; title?: string; children: ReactNode };
 
-export function NativeWorkspaceScreen({ eyebrow, title, description, children }: WorkspaceScreenProps) {
+export function NativeWorkspaceScreen({ eyebrow, title, description, children, liveData = false }: WorkspaceScreenProps) {
   const theme = useMobileTheme();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
@@ -24,7 +24,7 @@ export function NativeWorkspaceScreen({ eyebrow, title, description, children }:
         <Text style={[styles.eyebrow, { color: theme.rose }]}>{eyebrow}</Text>
         <Text style={[styles.title, { color: theme.ink }]}>{title}</Text>
         <Text style={[styles.description, { color: theme.muted }]}>{description}</Text>
-        <View style={[styles.preview, { backgroundColor: theme.blush, borderColor: theme.line }]}><Text style={{ color: theme.rose }}>✦</Text><Text style={[styles.previewText, { color: theme.ink }]}>Preview only · sample data, no live business actions.</Text></View>
+        {liveData ? null : <View style={[styles.preview, { backgroundColor: theme.blush, borderColor: theme.line }]}><Text style={{ color: theme.rose }}>✦</Text><Text style={[styles.previewText, { color: theme.ink }]}>Preview only · sample data, no live business actions.</Text></View>}
         {children}
       </ScrollView>
     </SafeAreaView>

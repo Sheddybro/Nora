@@ -1,23 +1,75 @@
-import React from 'react';
-import { Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
-
-const stock = [
-  ['!', 'Radiance Serum', '8 demo units · reorder at 12', 'Reorder'],
-  ['⌁', 'Velvet Matte Lip', '31 demo units · reorder at 10', 'Healthy'],
-  ['!', 'Silk Repair Mask', '0 demo units · reorder at 6', 'Out'],
-];
+import { createStockMovement, fetchInventoryStock, fetchProducts, fetchStockLocations, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
+import { useAuth } from './components/AuthContext';
 
 export default function InventoryScreen() {
   const theme = useMobileTheme();
-  return <NativeWorkspaceScreen eyebrow="STOCK CONTROL" title="Inventory" description="Review sample quantities and attention states. No stock ledger is connected.">
-    <MobilePanel eyebrow="DEMO SUMMARY" title="Stock at a glance">
+  const { session } = useAuth();
+  const [stock, setStock] = useState<InventoryStock[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [locations, setLocations] = useState<StockLocation[]>([]);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [kind, setKind] = useState<'receipt' | 'adjustment'>('receipt');
+  const [variantId, setVariantId] = useState(0);
+  const [locationId, setLocationId] = useState(0);
+  const [batchNumber, setBatchNumber] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [unitCost, setUnitCost] = useState('');
+  const [reason, setReason] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const refresh = () => Promise.all([fetchInventoryStock(), fetchProducts(), fetchStockLocations()]).then(([nextStock, nextProducts, nextLocations]) => {
+    setStock(nextStock); setProducts(nextProducts); setLocations(nextLocations);
+    setVariantId((current) => current || nextProducts.flatMap((product) => product.variants).find((variant) => variant.is_active)?.id || 0);
+    setLocationId((current) => current || nextLocations[0]?.id || 0);
+  }).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
+  useEffect(() => { refresh(); }, []);
+
+  const units = stock.reduce((total, item) => total + item.quantity, 0);
+  const value = stock.reduce((total, item) => total + Number(item.valuation), 0);
+  const variants = products.flatMap((product) => product.variants.filter((variant) => variant.is_active).map((variant) => ({ ...variant, label: `${product.name} · ${variant.sku}` })));
+
+  const saveMovement = async () => {
+    const parsedQuantity = Number(quantity);
+    if (!variantId || !locationId || !batchNumber.trim() || !reason.trim() || !Number.isInteger(parsedQuantity) || parsedQuantity === 0) {
+      setError('Choose a variant and location, then enter a batch, whole-unit quantity, and reason.'); return;
+    }
+    if (kind === 'receipt' && (parsedQuantity < 1 || !unitCost.trim())) { setError('Receipts need a positive quantity and unit cost.'); return; }
+    setIsSaving(true); setError('');
+    try {
+      await createStockMovement({ kind, variant_id: variantId, location_id: locationId, batch_number: batchNumber.trim(), quantity_delta: parsedQuantity, ...(kind === 'receipt' ? { unit_cost: unitCost.trim() } : {}), reason: reason.trim(), idempotency_key: `${Date.now()}-${Math.random().toString(36).slice(2)}` });
+      setQuantity(''); setReason('');
+      await refresh();
+      Alert.alert('Stock updated', 'The movement has been recorded in the business ledger.');
+    } catch (requestError) { setError((requestError as Error).message); }
+    finally { setIsSaving(false); }
+  };
+
+  return <NativeWorkspaceScreen eyebrow="STOCK CONTROL" title="Inventory" description="Review current business stock by location." liveData>
+    <MobilePanel eyebrow="LIVE SUMMARY" title="Stock at a glance">
       {[
-        ['Units on hand', '2,486'],
-        ['Items to reorder', '14'],
-        ['Locations', '2 demo locations'],
-      ].map(([label, value]) => <View key={label} style={[nativeStyles.stat, { borderBottomColor: theme.line }]}><Text style={[nativeStyles.statLabel, { color: theme.muted }]}>{label}</Text><Text style={[nativeStyles.statValue, { color: theme.ink }]}>{value}</Text></View>)}
+        ['Units on hand', units.toLocaleString('en-NG')],
+        ['Stock value', `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Stock lines', stock.length.toLocaleString('en-NG')],
+      ].map(([label, amount]) => <View key={label} style={[nativeStyles.stat, { borderBottomColor: theme.line }]}><Text style={[nativeStyles.statLabel, { color: theme.muted }]}>{label}</Text><Text style={[nativeStyles.statValue, { color: theme.ink }]}>{amount}</Text></View>)}
+      {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
     </MobilePanel>
-    <MobilePanel eyebrow="SAMPLE ALERTS" title="Needs review">{stock.map(([icon, title, detail, action]) => <MobileRow key={title} icon={icon} title={title} detail={detail} action={action} />)}</MobilePanel>
+    <MobilePanel eyebrow="BUSINESS LOCATIONS" title="Stock by product">{isLoading ? <View style={nativeStyles.empty}><Text style={[nativeStyles.emptyText, { color: theme.muted }]}>Loading inventory…</Text></View> : stock.length ? stock.map((item) => {
+      const needsReorder = item.reorder_point > 0 && item.quantity <= item.reorder_point;
+      return <MobileRow key={`${item.variant_id}-${item.location_id}`} icon={needsReorder ? '!' : '◇'} title={item.product_name} detail={`${item.variant_name || item.sku} · ${item.location_name} · reorder at ${item.reorder_point}`} action={needsReorder ? 'Reorder' : `${item.quantity} units`} />;
+    }) : <View style={nativeStyles.empty}><Text style={[nativeStyles.emptyTitle, { color: theme.ink }]}>No stock recorded</Text><Text style={[nativeStyles.emptyText, { color: theme.muted }]}>Stock balances appear after a batch is received or adjusted.</Text></View>}</MobilePanel>
+    {session?.role === 'owner' ? <MobilePanel eyebrow="STOCK CONTROL" title="Receive or adjust stock">
+      <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7, marginBottom: 8 }}><Picker selectedValue={kind} onValueChange={(next) => setKind(next)} accessibilityLabel="Movement type"><Picker.Item label="Receive stock" value="receipt" /><Picker.Item label="Adjust existing batch" value="adjustment" /></Picker></View>
+      <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7, marginBottom: 8 }}><Picker selectedValue={variantId} onValueChange={setVariantId} accessibilityLabel="Product variant"><Picker.Item label="Choose product variant" value={0} />{variants.map((variant) => <Picker.Item key={variant.id} label={variant.label} value={variant.id} />)}</Picker></View>
+      <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7, marginBottom: 8 }}><Picker selectedValue={locationId} onValueChange={setLocationId} accessibilityLabel="Stock location"><Picker.Item label="Choose stock location" value={0} />{locations.map((location) => <Picker.Item key={location.id} label={location.name} value={location.id} />)}</Picker></View>
+      {[[batchNumber, setBatchNumber, 'Batch number'], [quantity, setQuantity, 'Quantity change'], [reason, setReason, 'Reason']].map(([valueText, setter, label]) => <TextInput key={label as string} accessibilityLabel={label as string} placeholder={label as string} value={valueText as string} onChangeText={setter as (value: string) => void} placeholderTextColor={theme.muted} keyboardType={label === 'Quantity change' ? 'number-pad' : 'default'} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />)}
+      {kind === 'receipt' ? <TextInput accessibilityLabel="Unit cost" placeholder="Unit cost (NGN)" value={unitCost} onChangeText={setUnitCost} keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} /> : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
+      <Pressable accessibilityRole="button" disabled={isSaving} onPress={saveMovement} style={[nativeStyles.button, { backgroundColor: theme.rose, opacity: isSaving ? 0.6 : 1 }]}><Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{isSaving ? 'Recording…' : 'Record movement'}</Text></Pressable>
+    </MobilePanel> : null}
   </NativeWorkspaceScreen>;
 }
