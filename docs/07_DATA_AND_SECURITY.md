@@ -7,7 +7,7 @@
 - Define inventory cost method (weighted-average or FIFO) before implementing valuation. Do not silently change methods.
 - For batch/expiry, use batch-level quantities and immutable movement history.
 - Payment processing must use provider-hosted flows; never store card data.
-- Offline: define local queue, conflict policy, server authority and device recovery before enabling offline writes.
+- Offline stock movements: persist pending requests locally with user/business scope and client-generated idempotency keys; the server remains authoritative. Retry on authenticated startup, connectivity restoration, and foregrounding; show permanent validation/authorization conflicts. POS sales are not queued. Background execution, device recovery, and physical-device E2E remain unverified; do not claim full offline support.
 - Audit log must capture actor, business, event, timestamp, and redacted before/after values; do not store credentials.
 - Test SQLite and PostgreSQL for transactional semantics and constraints; PostgreSQL is the production target.
 - Login, API auth, CSRF, secure cookies, throttling and tenant isolation require separate security acceptance tests.

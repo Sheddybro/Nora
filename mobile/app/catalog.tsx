@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
-import { fetchProducts, createProduct, uploadProductImage, type Product } from '../lib/catalog';
+import { fetchProducts, createProduct, uploadProductImage, searchProductsByBarcode, type Product } from '../lib/catalog';
 import { useAuth } from './components/AuthContext';
 
 export default function CatalogScreen() {
@@ -15,6 +15,8 @@ export default function CatalogScreen() {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [price, setPrice] = useState('');
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [barcodeMatch, setBarcodeMatch] = useState<Product | null>(null);
   const [photo, setPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const refresh = () => fetchProducts().then(setProducts).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
@@ -40,7 +42,31 @@ export default function CatalogScreen() {
     } finally { setIsSaving(false); }
   };
 
+  const lookupBarcode = async () => {
+    const trimmed = barcodeQuery.trim();
+    if (!trimmed) {
+      setError('Enter a barcode to find a matching product.');
+      return;
+    }
+
+    try {
+      const results = await searchProductsByBarcode(trimmed);
+      setBarcodeMatch(results[0] || null);
+      setError(results.length ? '' : 'No product matches this barcode.');
+      if (results.length) {
+        Alert.alert('Barcode match', `${results[0].name} was found.`);
+      }
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    }
+  };
+
   return <NativeWorkspaceScreen eyebrow="CATALOG" title="Products" description="Browse products and variants for your business." liveData>
+    <MobilePanel eyebrow="BARCODE LOOKUP" title="Find product by code">
+      <TextInput accessibilityLabel="Barcode lookup" placeholder="Scan or type the barcode" value={barcodeQuery} onChangeText={setBarcodeQuery} placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
+      <Pressable accessibilityRole="button" onPress={lookupBarcode} style={[nativeStyles.button, { borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 11, fontWeight: '700' }}>Lookup barcode</Text></Pressable>
+      {barcodeMatch ? <MobileRow icon="◇" title={barcodeMatch.name} detail={barcodeMatch.variants.map((variant) => variant.sku).join(', ')} action="Match" /> : null}
+    </MobilePanel>
     <MobilePanel eyebrow="BUSINESS CATALOG" title={`${products.length} ${products.length === 1 ? 'product' : 'products'}`}>
       {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 12, fontSize: 10 }}>{error}</Text> : null}
       {isLoading ? <View style={nativeStyles.empty}><Text style={{ color: theme.muted, fontSize: 10 }}>Loading catalog…</Text></View> : null}

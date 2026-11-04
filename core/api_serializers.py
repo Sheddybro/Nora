@@ -5,8 +5,9 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db.models.functions import Lower
+from uuid import uuid4
 
-from .models import Batch, Category, Product, ProductImage, ProductVariant, StockLocation, StockMovement
+from .models import Adjustment, AuditEvent, Batch, Business, Category, Customer, Expense, InventoryAlert, Notification, Product, ProductImage, ProductVariant, PurchaseOrder, PurchaseOrderLine, Sale, SaleLine, StockLocation, StockMovement, StockTake, StockTakeLine, Supplier, Transfer
 from .permissions import membership_for_user
 from .upload_validators import validate_product_image
 
@@ -133,6 +134,38 @@ class ProductSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class ExpenseSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Expense
+        fields = ("id", "title", "category", "vendor", "note", "amount", "expense_date", "created_by_name", "created_at")
+        read_only_fields = ("id", "created_by_name", "created_at")
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        validated_data["business"] = membership.business if membership else None
+        validated_data["created_by"] = request.user if request else None
+        return Expense.objects.create(**validated_data)
+
+
+class AuditEventSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(source="actor.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = AuditEvent
+        fields = ("id", "event", "object_type", "object_id", "details", "before_value", "after_value", "actor_name", "created_at")
+        read_only_fields = ("id", "actor_name", "created_at")
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ("id", "title", "message", "kind", "is_read", "read_at", "link", "created_at")
+        read_only_fields = ("id", "created_at", "read_at")
+
+
 class StockLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockLocation
@@ -168,6 +201,330 @@ class StockMovementInputSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"unit_cost": "Unit cost is required for a receipt."})
         if not attrs["reason"]:
             raise serializers.ValidationError({"reason": "A reason is required."})
+        return attrs
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ("id", "name", "contact_name", "email", "phone", "address", "is_active", "created_at")
+        read_only_fields = ("id", "created_at")
+
+    def validate_name(self, value):
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        if membership and Supplier.objects.filter(business=membership.business, name__iexact=value).exists():
+            raise serializers.ValidationError("A supplier with this name already exists.")
+        return value
+
+    def create(self, validated_data):
+        membership = self.context["request"].user.active_membership
+        return Supplier.objects.create(business=membership.business, **validated_data)
+
+
+class PurchaseOrderLineSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(
+        source="variant",
+        queryset=ProductVariant.objects.none(),
+    )
+    variant_sku = serializers.CharField(source="variant.sku", read_only=True)
+
+    class Meta:
+        model = PurchaseOrderLine
+        fields = ("id", "variant_id", "variant_sku", "quantity_ordered", "quantity_received", "unit_cost")
+        read_only_fields = ("id", "variant_sku", "quantity_received")
+        extra_kwargs = {
+            "quantity_ordered": {"min_value": 1},
+            "unit_cost": {"min_value": 0},
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        self.fields["variant_id"].queryset = ProductVariant.objects.filter(
+            business=membership.business,
+            is_active=True,
+            product__is_active=True,
+        ) if membership else ProductVariant.objects.none()
+
+
+class PurchaseOrderSerializer(serializers.ModelSerializer):
+    supplier_id = serializers.PrimaryKeyRelatedField(source="supplier", queryset=Supplier.objects.none())
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    location_id = serializers.PrimaryKeyRelatedField(source="location", queryset=StockLocation.objects.none())
+    location_name = serializers.CharField(source="location.name", read_only=True)
+    idempotency_key = serializers.CharField(max_length=100, required=False, write_only=True, allow_blank=False)
+    lines = PurchaseOrderLineSerializer(many=True)
+
+    class Meta:
+        model = PurchaseOrder
+        fields = (
+            "id", "order_number", "supplier_id", "supplier_name", "location_id",
+            "location_name", "status", "expected_date", "cancellation_reason", "idempotency_key",
+            "lines", "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "order_number", "supplier_name", "location_name", "status", "cancellation_reason", "created_at", "updated_at")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        self.fields["supplier_id"].queryset = Supplier.objects.filter(
+            business=membership.business,
+            is_active=True,
+        ) if membership else Supplier.objects.none()
+        self.fields["location_id"].queryset = StockLocation.objects.filter(
+            business=membership.business,
+            is_active=True,
+        ) if membership else StockLocation.objects.none()
+        self.fields["lines"].child.fields["variant_id"].queryset = ProductVariant.objects.filter(
+            business=membership.business,
+            is_active=True,
+            product__is_active=True,
+        ) if membership else ProductVariant.objects.none()
+
+    def validate_lines(self, lines):
+        variant_ids = [line["variant"].pk for line in lines]
+        if not lines:
+            raise serializers.ValidationError("A purchase order must contain at least one line.")
+        if len(variant_ids) != len(set(variant_ids)):
+            raise serializers.ValidationError("Each variant may appear only once on a purchase order.")
+        return lines
+
+    def create(self, validated_data):
+        lines = validated_data.pop("lines")
+        idempotency_key = validated_data.pop("idempotency_key", "")
+        membership = self.context["request"].user.active_membership
+        Business.objects.select_for_update().get(pk=membership.business_id)
+        self.replayed = False
+        if idempotency_key:
+            existing = PurchaseOrder.objects.filter(
+                business=membership.business,
+                idempotency_key=idempotency_key,
+            ).prefetch_related("lines").first()
+            if existing:
+                existing_lines = list(existing.lines.order_by("id"))
+                matches = (
+                    existing.supplier_id == validated_data["supplier"].pk
+                    and existing.location_id == validated_data["location"].pk
+                    and existing.expected_date == validated_data.get("expected_date")
+                    and len(existing_lines) == len(lines)
+                    and all(
+                        line.variant_id == item["variant"].pk
+                        and line.quantity_ordered == item["quantity_ordered"]
+                        and line.unit_cost == item["unit_cost"]
+                        for line, item in zip(existing_lines, lines)
+                    )
+                )
+                if not matches:
+                    raise serializers.ValidationError({"idempotency_key": "This key was already used for a different purchase order."})
+                self.replayed = True
+                return existing
+
+        order = PurchaseOrder.objects.create(
+            business=membership.business,
+            created_by=self.context["request"].user,
+            order_number=f"PO-{membership.business_id}-{uuid4().hex[:12].upper()}",
+            idempotency_key=idempotency_key,
+            **validated_data,
+        )
+        PurchaseOrderLine.objects.bulk_create([
+            PurchaseOrderLine(purchase_order=order, **line)
+            for line in lines
+        ])
+        return order
+
+
+class PurchaseOrderReceiveSerializer(serializers.Serializer):
+    line_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.IntegerField(min_value=1)
+    batch_number = serializers.CharField(max_length=100, trim_whitespace=True)
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+    idempotency_key = serializers.CharField(max_length=100, trim_whitespace=True)
+
+
+class PurchaseOrderCancelSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=240, trim_whitespace=True)
+
+    def validate_reason(self, value):
+        if not value:
+            raise serializers.ValidationError("A cancellation reason is required.")
+        return value
+
+
+class SaleLineSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(source="variant", queryset=ProductVariant.objects.none())
+    variant_name = serializers.CharField(source="variant.name", read_only=True)
+    sku = serializers.CharField(source="variant.sku", read_only=True)
+
+    class Meta:
+        model = SaleLine
+        fields = ("id", "variant_id", "variant_name", "sku", "quantity", "unit_price", "line_total", "discount_amount")
+        read_only_fields = ("id", "variant_name", "sku", "line_total")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        self.fields["variant_id"].queryset = ProductVariant.objects.filter(
+            business=membership.business,
+            is_active=True,
+            product__is_active=True,
+        ) if membership else ProductVariant.objects.none()
+
+
+class SaleSerializer(serializers.ModelSerializer):
+    lines = SaleLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Sale
+        fields = (
+            "id",
+            "invoice_number",
+            "status",
+            "location_id",
+            "customer_id",
+            "subtotal",
+            "discount_amount",
+            "tax_amount",
+            "total",
+            "paid_amount",
+            "change_amount",
+            "created_at",
+            "lines",
+        )
+        read_only_fields = ("id", "invoice_number", "status", "subtotal", "discount_amount", "tax_amount", "total", "paid_amount", "change_amount", "created_at", "lines")
+
+
+class CheckoutLineSerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.IntegerField(min_value=1)
+    unit_price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+
+
+class CheckoutSaleSerializer(serializers.Serializer):
+    location_id = serializers.IntegerField(min_value=1)
+    items = CheckoutLineSerializer(many=True)
+    payment_method = serializers.ChoiceField(choices=["cash", "card", "bank_transfer", "wallet"])
+    amount_paid = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    idempotency_key = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    def validate_items(self, items):
+        if not items:
+            raise serializers.ValidationError("A sale must contain at least one line item.")
+        return items
+
+
+class SaleRefundSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=240, trim_whitespace=True)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    idempotency_key = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    def validate_reason(self, value):
+        if not value:
+            raise serializers.ValidationError("A refund reason is required.")
+        return value
+
+
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = ("id", "name", "email", "phone", "created_at")
+        read_only_fields = fields
+
+
+class TransferSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(source="variant", queryset=ProductVariant.objects.none())
+    from_location_id = serializers.PrimaryKeyRelatedField(source="from_location", queryset=StockLocation.objects.none())
+    to_location_id = serializers.PrimaryKeyRelatedField(source="to_location", queryset=StockLocation.objects.none())
+    variant_name = serializers.CharField(source="variant.name", read_only=True)
+
+    class Meta:
+        model = Transfer
+        fields = ("id", "variant_id", "variant_name", "from_location_id", "to_location_id", "quantity", "reason", "status", "created_at")
+        read_only_fields = ("id", "variant_name", "status", "created_at")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        business = membership.business if membership else None
+        self.fields["variant_id"].queryset = ProductVariant.objects.filter(business=business, is_active=True, product__is_active=True) if business else ProductVariant.objects.none()
+        self.fields["from_location_id"].queryset = StockLocation.objects.filter(business=business, is_active=True) if business else StockLocation.objects.none()
+        self.fields["to_location_id"].queryset = StockLocation.objects.filter(business=business, is_active=True) if business else StockLocation.objects.none()
+
+    def validate(self, attrs):
+        if attrs["from_location"] == attrs["to_location"]:
+            raise serializers.ValidationError("A transfer must move inventory to a different location.")
+        return attrs
+
+
+class AdjustmentSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(source="variant", queryset=ProductVariant.objects.none())
+    location_id = serializers.PrimaryKeyRelatedField(source="location", queryset=StockLocation.objects.none())
+    batch_id = serializers.PrimaryKeyRelatedField(source="batch", queryset=Batch.objects.none(), required=False, allow_null=True)
+
+    class Meta:
+        model = Adjustment
+        fields = ("id", "variant_id", "location_id", "batch_id", "quantity_delta", "reason", "created_at")
+        read_only_fields = ("id", "created_at")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        business = membership.business if membership else None
+        self.fields["variant_id"].queryset = ProductVariant.objects.filter(business=business, is_active=True, product__is_active=True) if business else ProductVariant.objects.none()
+        self.fields["location_id"].queryset = StockLocation.objects.filter(business=business, is_active=True) if business else StockLocation.objects.none()
+        self.fields["batch_id"].queryset = Batch.objects.filter(business=business) if business else Batch.objects.none()
+
+
+class InventoryAlertSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(source="variant", read_only=True)
+    location_id = serializers.PrimaryKeyRelatedField(source="location", read_only=True)
+
+    class Meta:
+        model = InventoryAlert
+        fields = ("id", "variant_id", "location_id", "current_quantity", "reorder_point", "severity", "message", "is_resolved", "created_at")
+        read_only_fields = fields
+
+
+class StockTakeLineSerializer(serializers.ModelSerializer):
+    variant_id = serializers.PrimaryKeyRelatedField(source="variant", queryset=ProductVariant.objects.none())
+
+    class Meta:
+        model = StockTakeLine
+        fields = ("id", "variant_id", "expected_quantity", "counted_quantity", "quantity_delta", "reason")
+        read_only_fields = ("id", "expected_quantity", "quantity_delta")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        business = membership.business if membership else None
+        self.fields["variant_id"].queryset = ProductVariant.objects.filter(business=business, is_active=True, product__is_active=True) if business else ProductVariant.objects.none()
+
+
+class StockTakeSerializer(serializers.ModelSerializer):
+    location_id = serializers.PrimaryKeyRelatedField(source="location", queryset=StockLocation.objects.none())
+    lines = StockTakeLineSerializer(many=True, required=False)
+
+    class Meta:
+        model = StockTake
+        fields = ("id", "location_id", "reason", "created_at", "lines")
+        read_only_fields = ("id", "created_at")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        membership = getattr(request.user, "active_membership", None) if request else None
+        business = membership.business if membership else None
+        self.fields["location_id"].queryset = StockLocation.objects.filter(business=business, is_active=True) if business else StockLocation.objects.none()
+
+    def validate(self, attrs):
+        if not attrs.get("lines"):
+            raise serializers.ValidationError("A stocktake must include at least one counted item.")
         return attrs
 
 

@@ -1,10 +1,12 @@
 from django.test import TestCase,Client,override_settings
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
 from django.core.files.uploadedfile import SimpleUploadedFile
+from decimal import Decimal
 from io import BytesIO
 from PIL import Image
 import tempfile
-from .models import Batch, Business, Category, Membership, Product, ProductImage, ProductVariant, StockLocation, StockMovement
+from .models import Adjustment, AuditEvent, Batch, Business, Category, Customer, Expense, InventoryAlert, Membership, Notification, Payment, Product, ProductImage, ProductVariant, PurchaseOrder, PurchaseOrderLine, Sale, SaleLine, StockLocation, StockMovement, StockTake, Supplier, Transfer
 class FoundationTests(TestCase):
  def test_login_accepts_valid_credentials(self):
     user=get_user_model().objects.create_user(username='login-user',password='secure-pass-123')
@@ -390,3 +392,630 @@ class PhaseFourWebTests(TestCase):
     accepted=client.post('/api/v1/catalog/products/',payload,content_type='application/json',HTTP_X_CSRFTOKEN=token)
     self.assertEqual(accepted.status_code,201,accepted.content)
     self.assertTrue(Product.objects.filter(business=business,name='CSRF Product').exists())
+
+
+class PhaseFivePurchasingApiTests(TestCase):
+ def setUp(self):
+    self.business=Business.objects.create(name='Phase Five Purchasing Business')
+    self.other_business=Business.objects.create(name='Other Purchasing Business')
+    self.owner=get_user_model().objects.create_user(username='phase-five-owner',password='secure-pass-123')
+    self.staff=get_user_model().objects.create_user(username='phase-five-staff',password='secure-pass-123')
+    Membership.objects.create(user=self.owner,business=self.business,role=Membership.OWNER)
+    Membership.objects.create(user=self.staff,business=self.business,role=Membership.STAFF)
+    self.supplier=Supplier.objects.create(business=self.business,name='Local Beauty Supply')
+    self.location=StockLocation.objects.create(business=self.business,name='Receiving')
+    self.product=Product.objects.create(business=self.business,name='Purchase Test Product')
+    self.variant=ProductVariant.objects.create(
+        business=self.business,product=self.product,sku='PHASE5-001',price='100.00'
+    )
+    self.client=Client()
+
+ def authenticate(self,user):
+    response=self.client.post(
+        '/api/v1/auth/login/',
+        {'username':user.username,'password':'secure-pass-123'},
+        content_type='application/json',
+    )
+    self.assertEqual(response.status_code,200)
+    self.client.defaults['HTTP_AUTHORIZATION']=f"Bearer {response.json()['access']}"
+
+ def create_order(self,**overrides):
+    payload={
+        'supplier_id':self.supplier.pk,
+        'location_id':self.location.pk,
+        'expected_date':'2026-12-01',
+        'lines':[{
+            'variant_id':self.variant.pk,
+            'quantity_ordered':5,
+            'unit_cost':'30.00',
+        }],
+    }
+    payload.update(overrides)
+    return self.client.post('/api/v1/purchasing/orders/',payload,content_type='application/json')
+
+ def test_purchasing_requires_auth_and_staff_permission(self):
+    self.assertEqual(self.client.get('/api/v1/purchasing/suppliers/').status_code,401)
+    self.authenticate(self.staff)
+    self.assertEqual(self.client.get('/api/v1/purchasing/orders/').status_code,403)
+    self.assertEqual(
+        self.client.post('/api/v1/purchasing/suppliers/',{'name':'No Staff Supplier'},content_type='application/json').status_code,
+        403,
+    )
+
+ def test_supplier_and_order_creation_are_business_scoped(self):
+    self.authenticate(self.owner)
+    supplier=self.client.post(
+        '/api/v1/purchasing/suppliers/',
+        {'name':'Second Supplier','email':'orders@example.test'},
+        content_type='application/json',
+    )
+    self.assertEqual(supplier.status_code,201,supplier.content)
+    created=self.create_order()
+    self.assertEqual(created.status_code,201,created.content)
+    order=created.json()
+    self.assertTrue(order['order_number'].startswith(f'PO-{self.business.pk}-'))
+    self.assertEqual(order['status'],PurchaseOrder.DRAFT)
+    self.assertEqual(order['lines'][0]['quantity_received'],0)
+
+    foreign_supplier=Supplier.objects.create(business=self.other_business,name='Foreign Supplier')
+    rejected=self.create_order(supplier_id=foreign_supplier.pk)
+    self.assertEqual(rejected.status_code,400)
+    self.assertEqual(PurchaseOrder.objects.filter(business=self.business).count(),1)
+
+ def test_purchase_order_creation_replays_exact_request_and_rejects_key_reuse(self):
+    self.authenticate(self.owner)
+    payload={
+        'supplier_id':self.supplier.pk,
+        'location_id':self.location.pk,
+        'expected_date':'2026-12-01',
+        'idempotency_key':'phase-five-order-create-1',
+        'lines':[{'variant_id':self.variant.pk,'quantity_ordered':5,'unit_cost':'30.00'}],
+    }
+    first=self.client.post('/api/v1/purchasing/orders/',payload,content_type='application/json')
+    replay=self.client.post('/api/v1/purchasing/orders/',payload,content_type='application/json')
+    self.assertEqual(first.status_code,201,first.content)
+    self.assertEqual(replay.status_code,200,replay.content)
+    self.assertEqual(first.json()['id'],replay.json()['id'])
+    self.assertEqual(PurchaseOrder.objects.filter(business=self.business).count(),1)
+
+    changed_payload={**payload,'lines':[{'variant_id':self.variant.pk,'quantity_ordered':4,'unit_cost':'30.00'}]}
+    conflict=self.client.post('/api/v1/purchasing/orders/',changed_payload,content_type='application/json')
+    self.assertEqual(conflict.status_code,400)
+    self.assertEqual(PurchaseOrder.objects.filter(business=self.business).count(),1)
+
+ def test_partial_receipts_replay_and_full_receipt_reconcile_stock(self):
+    self.authenticate(self.owner)
+    order_response=self.create_order()
+    self.assertEqual(order_response.status_code,201,order_response.content)
+    order=order_response.json()
+    placed=self.client.post(f"/api/v1/purchasing/orders/{order['id']}/place/")
+    self.assertEqual(placed.status_code,200,placed.content)
+    self.assertEqual(placed.json()['status'],PurchaseOrder.ORDERED)
+
+    receipt_data={
+        'line_id':order['lines'][0]['id'],
+        'quantity':2,
+        'batch_number':'PHASE5-LOT-1',
+        'expiry_date':'2027-12-31',
+        'idempotency_key':'phase-five-receipt-1',
+    }
+    received=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        receipt_data,
+        content_type='application/json',
+    )
+    replay=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        receipt_data,
+        content_type='application/json',
+    )
+    self.assertEqual(received.status_code,201,received.content)
+    self.assertEqual(received.json()['status'],PurchaseOrder.PARTIALLY_RECEIVED)
+    self.assertEqual(replay.status_code,200,replay.content)
+    self.assertTrue(replay.json()['replayed'])
+    self.assertEqual(Batch.objects.get().quantity_on_hand,2)
+    self.assertEqual(StockMovement.objects.count(),1)
+
+    final_receipt=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        {
+            'line_id':order['lines'][0]['id'],
+            'quantity':3,
+            'batch_number':'PHASE5-LOT-2',
+            'idempotency_key':'phase-five-receipt-2',
+        },
+        content_type='application/json',
+    )
+    self.assertEqual(final_receipt.status_code,201,final_receipt.content)
+    self.assertEqual(final_receipt.json()['status'],PurchaseOrder.RECEIVED)
+    line=PurchaseOrderLine.objects.get(purchase_order_id=order['id'])
+    self.assertEqual(line.quantity_received,5)
+    self.assertEqual(Batch.objects.filter(variant=self.variant).aggregate(total=Sum('quantity_on_hand'))['total'],5)
+    movements=StockMovement.objects.filter(purchase_order_line=line)
+    self.assertEqual(movements.count(),2)
+    self.assertEqual(list(movements.values_list('unit_cost',flat=True)),[Decimal('30.00'),Decimal('30.00')])
+
+ def test_over_receipt_and_cancelled_order_do_not_post_stock(self):
+    self.authenticate(self.owner)
+    order=self.create_order().json()
+    self.client.post(f"/api/v1/purchasing/orders/{order['id']}/place/")
+    over_receipt=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        {
+            'line_id':order['lines'][0]['id'],
+            'quantity':6,
+            'batch_number':'OVER-RECEIPT',
+            'idempotency_key':'phase-five-over-receipt',
+        },
+        content_type='application/json',
+    )
+    self.assertEqual(over_receipt.status_code,400)
+    self.assertEqual(StockMovement.objects.count(),0)
+
+    cancelled=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/cancel/",
+        {'reason':'Supplier could not fulfill the order'},
+        content_type='application/json',
+    )
+    self.assertEqual(cancelled.status_code,200,cancelled.content)
+    self.assertEqual(cancelled.json()['status'],PurchaseOrder.CANCELLED)
+    blocked=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        {
+            'line_id':order['lines'][0]['id'],
+            'quantity':1,
+            'batch_number':'CANCELLED-ORDER',
+            'idempotency_key':'phase-five-cancelled-receipt',
+        },
+        content_type='application/json',
+    )
+    self.assertEqual(blocked.status_code,400)
+    self.assertEqual(StockMovement.objects.count(),0)
+    self.assertEqual(Batch.objects.count(),0)
+
+ def test_cancel_after_partial_receipt_preserves_received_stock(self):
+    self.authenticate(self.owner)
+    order=self.create_order().json()
+    self.client.post(f"/api/v1/purchasing/orders/{order['id']}/place/")
+    received=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/receive/",
+        {
+            'line_id':order['lines'][0]['id'],
+            'quantity':2,
+            'batch_number':'PARTIAL-LOT',
+            'idempotency_key':'phase-five-partial-cancel-receipt',
+        },
+        content_type='application/json',
+    )
+    self.assertEqual(received.status_code,201)
+    cancelled=self.client.post(
+        f"/api/v1/purchasing/orders/{order['id']}/cancel/",
+        {'reason':'Supplier cancelled remaining units'},
+        content_type='application/json',
+    )
+    self.assertEqual(cancelled.status_code,200)
+    self.assertEqual(Batch.objects.get().quantity_on_hand,2)
+    self.assertEqual(PurchaseOrderLine.objects.get().quantity_received,2)
+
+
+class PhaseSixSalesApiTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(name='Phase Six Sales Business')
+        self.owner = get_user_model().objects.create_user(username='phase-six-owner', password='secure-pass-123')
+        self.staff = get_user_model().objects.create_user(username='phase-six-staff', password='secure-pass-123')
+        Membership.objects.create(user=self.owner, business=self.business, role=Membership.OWNER)
+        Membership.objects.create(user=self.staff, business=self.business, role=Membership.STAFF)
+        self.category = Category.objects.create(business=self.business, name='Sales Category')
+        self.product = Product.objects.create(business=self.business, category=self.category, name='Sales Product')
+        self.variant = ProductVariant.objects.create(
+            business=self.business,
+            product=self.product,
+            sku='POS-001',
+            price='25.00',
+            unit_cost='10.00',
+        )
+        self.location = StockLocation.objects.create(business=self.business, name='Checkout Counter')
+        Batch.objects.create(
+            business=self.business,
+            variant=self.variant,
+            location=self.location,
+            batch_number='SALE-LOT-1',
+            quantity_on_hand=10,
+            unit_cost='10.00',
+        )
+        self.client = Client()
+
+    def authenticate(self, user):
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': user.username, 'password': 'secure-pass-123'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f"Bearer {response.json()['access']}"
+
+    def test_staff_can_view_sales_and_check_out(self):
+        self.authenticate(self.staff)
+        sales = self.client.get('/api/v1/sales/')
+        self.assertEqual(sales.status_code, 200)
+        checkout = self.client.post(
+            '/api/v1/sales/checkout/',
+            {
+                'location_id': self.location.pk,
+                'items': [{'variant_id': self.variant.pk, 'quantity': 1, 'unit_price': '25.00'}],
+                'payment_method': 'cash',
+                'amount_paid': '25.00',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(checkout.status_code, 201)
+        self.assertEqual(checkout.json()['status'], Sale.PAID)
+
+    def test_owner_checkout_reduces_stock_and_tracks_totals(self):
+        self.authenticate(self.owner)
+        checkout = self.client.post(
+            '/api/v1/sales/checkout/',
+            {
+                'location_id': self.location.pk,
+                'items': [{'variant_id': self.variant.pk, 'quantity': 2, 'unit_price': '25.00'}],
+                'payment_method': 'cash',
+                'amount_paid': '50.00',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(checkout.status_code, 201, checkout.content)
+        payload = checkout.json()
+        self.assertEqual(payload['status'], Sale.PAID)
+        self.assertEqual(payload['total'], '50.00')
+        self.assertEqual(payload['paid_amount'], '50.00')
+        self.assertEqual(Batch.objects.get(pk=1).quantity_on_hand, 8)
+        self.assertEqual(Sale.objects.count(), 1)
+        self.assertEqual(SaleLine.objects.count(), 1)
+        self.assertEqual(StockMovement.objects.filter(variant=self.variant).count(), 1)
+
+    def test_checkout_idempotency_replays_same_sale_and_rejects_key_reuse(self):
+        self.authenticate(self.owner)
+        payload = {
+            'location_id': self.location.pk,
+            'items': [{'variant_id': self.variant.pk, 'quantity': 2, 'unit_price': '25.00'}],
+            'payment_method': 'cash',
+            'amount_paid': '50.00',
+            'idempotency_key': 'phase-six-checkout-replay-1',
+        }
+
+        first = self.client.post('/api/v1/pos/checkout/', payload, content_type='application/json')
+        replay = self.client.post('/api/v1/pos/checkout/', payload, content_type='application/json')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(first.json()['id'], replay.json()['id'])
+        self.assertEqual(Sale.objects.count(), 1)
+        self.assertEqual(Sale.objects.get().payments.count(), 1)
+        self.assertEqual(Batch.objects.get().quantity_on_hand, 8)
+
+        changed_payload = {**payload, 'amount_paid': '40.00'}
+        conflict = self.client.post('/api/v1/pos/checkout/', changed_payload, content_type='application/json')
+        self.assertEqual(conflict.status_code, 400)
+        self.assertEqual(Sale.objects.count(), 1)
+        self.assertEqual(Batch.objects.get().quantity_on_hand, 8)
+
+    def test_refund_reverses_stock_and_marks_sale_refunded(self):
+        self.authenticate(self.owner)
+        checkout = self.client.post(
+            '/api/v1/sales/checkout/',
+            {
+                'location_id': self.location.pk,
+                'items': [{'variant_id': self.variant.pk, 'quantity': 2, 'unit_price': '25.00'}],
+                'payment_method': 'cash',
+                'amount_paid': '50.00',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(checkout.status_code, 201)
+        sale_id = checkout.json()['id']
+        refund = self.client.post(
+            f'/api/v1/sales/{sale_id}/refund/',
+            {'reason': 'Customer requested return', 'amount': '50.00', 'idempotency_key': 'phase-six-refund-1'},
+            content_type='application/json',
+        )
+        self.assertEqual(refund.status_code, 201, refund.content)
+        self.assertEqual(refund.json()['status'], Sale.REFUNDED)
+        self.assertEqual(Batch.objects.get().quantity_on_hand, 10)
+
+    def test_refund_idempotency_replays_without_double_posting(self):
+        self.authenticate(self.owner)
+        checkout = self.client.post(
+            '/api/v1/sales/checkout/',
+            {
+                'location_id': self.location.pk,
+                'items': [{'variant_id': self.variant.pk, 'quantity': 2, 'unit_price': '25.00'}],
+                'payment_method': 'cash',
+                'amount_paid': '50.00',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(checkout.status_code, 201)
+        sale_id = checkout.json()['id']
+        payload = {'reason': 'Customer requested return', 'amount': '50.00', 'idempotency_key': 'phase-six-refund-replay-1'}
+
+        first = self.client.post(f'/api/v1/sales/{sale_id}/refund/', payload, content_type='application/json')
+        replay = self.client.post(f'/api/v1/sales/{sale_id}/refund/', payload, content_type='application/json')
+
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(replay.status_code, 201, replay.content)
+        self.assertEqual(Payment.objects.filter(sale_id=sale_id, method=Payment.REFUND).count(), 1)
+        self.assertEqual(Batch.objects.get().quantity_on_hand, 10)
+
+    def test_refund_tracks_multiple_batches_without_overrestoring_stock(self):
+        self.authenticate(self.owner)
+        Batch.objects.create(
+            business=self.business,
+            variant=self.variant,
+            location=self.location,
+            batch_number='SALE-LOT-2',
+            quantity_on_hand=5,
+            unit_cost='10.00',
+        )
+        checkout = self.client.post(
+            '/api/v1/sales/checkout/',
+            {
+                'location_id': self.location.pk,
+                'items': [{'variant_id': self.variant.pk, 'quantity': 4, 'unit_price': '25.00'}],
+                'payment_method': 'cash',
+                'amount_paid': '100.00',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(checkout.status_code, 201)
+        sale_id = checkout.json()['id']
+
+        refund = self.client.post(
+            f'/api/v1/sales/{sale_id}/refund/',
+            {'reason': 'Customer return', 'amount': '100.00', 'idempotency_key': 'phase-six-multi-batch-refund'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(refund.status_code, 201, refund.content)
+        self.assertEqual(Batch.objects.filter(variant=self.variant, location=self.location).aggregate(total=Sum('quantity_on_hand'))['total'], 15)
+
+class PhaseSevenStockOperationsApiTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(name='Phase Seven Inventory Business')
+        self.owner = get_user_model().objects.create_user(username='phase-seven-owner', password='secure-pass-123')
+        self.staff = get_user_model().objects.create_user(username='phase-seven-staff', password='secure-pass-123')
+        Membership.objects.create(user=self.owner, business=self.business, role=Membership.OWNER)
+        Membership.objects.create(user=self.staff, business=self.business, role=Membership.STAFF)
+        self.category = Category.objects.create(business=self.business, name='Stock Operations')
+        self.product = Product.objects.create(business=self.business, category=self.category, name='Transfer Product')
+        self.variant = ProductVariant.objects.create(
+            business=self.business,
+            product=self.product,
+            sku='PH7-001',
+            price='100.00',
+            unit_cost='40.00',
+            reorder_point=3,
+        )
+        self.from_location = StockLocation.objects.create(business=self.business, name='Front Counter')
+        self.to_location = StockLocation.objects.create(business=self.business, name='Back Room')
+        Batch.objects.create(
+            business=self.business,
+            variant=self.variant,
+            location=self.from_location,
+            batch_number='PH7-LOT-1',
+            quantity_on_hand=10,
+            unit_cost='40.00',
+        )
+        self.client = Client()
+
+    def authenticate(self, user):
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': user.username, 'password': 'secure-pass-123'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f"Bearer {response.json()['access']}"
+
+    def test_owner_can_transfer_stock_between_locations_and_staff_cannot(self):
+        self.authenticate(self.owner)
+        transfer = self.client.post(
+            '/api/v1/inventory/transfers/',
+            {
+                'variant_id': self.variant.pk,
+                'from_location_id': self.from_location.pk,
+                'to_location_id': self.to_location.pk,
+                'quantity': 4,
+                'reason': 'Store replenishment',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(transfer.status_code, 201, transfer.content)
+        self.assertEqual(Transfer.objects.count(), 1)
+        self.assertEqual(Batch.objects.get(variant=self.variant, location=self.from_location).quantity_on_hand, 6)
+        self.assertEqual(Batch.objects.get(variant=self.variant, location=self.to_location).quantity_on_hand, 4)
+
+        self.authenticate(self.staff)
+        blocked = self.client.post(
+            '/api/v1/inventory/transfers/',
+            {
+                'variant_id': self.variant.pk,
+                'from_location_id': self.from_location.pk,
+                'to_location_id': self.to_location.pk,
+                'quantity': 1,
+                'reason': 'Blocked attempt',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(blocked.status_code, 403)
+
+    def test_stocktake_creates_adjustments_and_alerts_when_below_reorder_point(self):
+        self.authenticate(self.owner)
+        stocktake = self.client.post(
+            '/api/v1/inventory/stocktakes/',
+            {
+                'location_id': self.from_location.pk,
+                'items': [{'variant_id': self.variant.pk, 'counted_quantity': 2}],
+                'reason': 'Cycle count',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(stocktake.status_code, 201, stocktake.content)
+        self.assertEqual(Adjustment.objects.count(), 1)
+        self.assertEqual(Adjustment.objects.get().quantity_delta, -8)
+        self.assertEqual(Batch.objects.get(variant=self.variant, location=self.from_location).quantity_on_hand, 2)
+        alerts = self.client.get('/api/v1/inventory/alerts/')
+        self.assertEqual(alerts.status_code, 200)
+        self.assertTrue(any(item['variant_id'] == self.variant.pk for item in alerts.json()['results']))
+
+    def test_transaction_reconciles_ledger_after_recount(self):
+        self.authenticate(self.owner)
+        first = self.client.post(
+            '/api/v1/inventory/stocktakes/',
+            {
+                'location_id': self.from_location.pk,
+                'items': [{'variant_id': self.variant.pk, 'counted_quantity': 2}],
+                'reason': 'First count',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(first.status_code, 201)
+        second = self.client.post(
+            '/api/v1/inventory/stocktakes/',
+            {
+                'location_id': self.from_location.pk,
+                'items': [{'variant_id': self.variant.pk, 'counted_quantity': 10}],
+                'reason': 'Recount verification',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(second.status_code, 201)
+        movements = StockMovement.objects.filter(variant=self.variant, location=self.from_location)
+        self.assertEqual(movements.count(), 2)
+        self.assertEqual(sum(int(m.quantity_delta) for m in movements), 0)
+        self.assertEqual(StockTake.objects.count(), 2)
+
+
+class PhaseEightFinanceReportingApiTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(name='Phase Eight Finance Business')
+        self.owner = get_user_model().objects.create_user(username='phase-eight-owner', password='secure-pass-123')
+        self.staff = get_user_model().objects.create_user(username='phase-eight-staff', password='secure-pass-123')
+        Membership.objects.create(user=self.owner, business=self.business, role=Membership.OWNER)
+        Membership.objects.create(user=self.staff, business=self.business, role=Membership.STAFF)
+        self.client = Client()
+
+    def authenticate(self, user):
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': user.username, 'password': 'secure-pass-123'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f"Bearer {response.json()['access']}"
+
+    def test_owner_can_record_expense_and_staff_cannot_access_reports(self):
+        self.authenticate(self.owner)
+        expense = self.client.post(
+            '/api/v1/expenses/',
+            {
+                'title': 'Rent',
+                'category': 'Operations',
+                'amount': '150.00',
+                'vendor': 'North Gate Realty',
+                'note': 'Monthly rent',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(expense.status_code, 201, expense.content)
+        self.assertEqual(Expense.objects.count(), 1)
+        summary = self.client.get('/api/v1/reports/summary/')
+        self.assertEqual(summary.status_code, 200)
+        payload = summary.json()
+        self.assertEqual(payload['expense_total'], '150.00')
+        self.assertEqual(payload['net'], '-150.00')
+
+        self.authenticate(self.staff)
+        blocked = self.client.get('/api/v1/reports/summary/')
+        self.assertEqual(blocked.status_code, 403)
+
+    def test_audit_events_and_notifications_are_business_scoped(self):
+        self.authenticate(self.owner)
+        self.client.post(
+            '/api/v1/expenses/',
+            {
+                'title': 'Utilities',
+                'category': 'Operations',
+                'amount': '75.00',
+                'vendor': 'GridCo',
+                'note': 'Power bill',
+            },
+            content_type='application/json',
+        )
+        audit = self.client.get('/api/v1/audit-events/')
+        self.assertEqual(audit.status_code, 200)
+        self.assertTrue(any(item['event'] == 'expense.created' for item in audit.json()['results']))
+        notifications = self.client.get('/api/v1/notifications/')
+        self.assertEqual(notifications.status_code, 200)
+        self.assertTrue(any(item['title'] == 'Expense recorded' for item in notifications.json()['results']))
+
+
+class PhaseNineMobileCompletionApiTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(name='Phase Nine Mobile Business')
+        self.owner = get_user_model().objects.create_user(username='phase-nine-owner', password='secure-pass-123')
+        Membership.objects.create(user=self.owner, business=self.business, role=Membership.OWNER)
+        self.client = Client()
+
+    def authenticate(self):
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': self.owner.username, 'password': 'secure-pass-123'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f"Bearer {response.json()['access']}"
+
+    def test_catalog_barcode_lookup_finds_only_matching_variant(self):
+        product_a = Product.objects.create(business=self.business, name='Luminous Serum')
+        product_b = Product.objects.create(business=self.business, name='Glow Mist')
+        ProductVariant.objects.create(
+            business=self.business,
+            product=product_a,
+            name='30 ml',
+            sku='NB-SERUM-030',
+            barcode='NB-SCAN-001',
+            price='18500.00',
+            unit_cost='6000.00',
+        )
+        ProductVariant.objects.create(
+            business=self.business,
+            product=product_b,
+            name='120 ml',
+            sku='NB-MIST-120',
+            barcode='NB-SCAN-002',
+            price='28000.00',
+            unit_cost='9000.00',
+        )
+
+        self.authenticate()
+        response = self.client.get('/api/v1/catalog/products/?barcode=nb-scan-001')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], 1)
+        self.assertEqual(payload['results'][0]['name'], 'Luminous Serum')
+        self.assertEqual(payload['results'][0]['variants'][0]['barcode'], 'NB-SCAN-001')
+
+    def test_mobile_customer_list_is_authenticated_and_business_scoped(self):
+        Customer.objects.create(business=self.business, name='Current Business Customer', phone='08030000000')
+        other_business = Business.objects.create(name='Other Phase Nine Business')
+        Customer.objects.create(business=other_business, name='Other Business Customer', phone='08040000000')
+
+        unauthenticated = self.client.get('/api/v1/customers/')
+        self.assertEqual(unauthenticated.status_code, 401)
+        self.authenticate()
+        response = self.client.get('/api/v1/customers/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 1)
+        self.assertEqual(response.json()['results'][0]['name'], 'Current Business Customer')
+        self.assertEqual(self.client.get('/api/v1/customers/').json()['results'][0]['phone'], '08030000000')

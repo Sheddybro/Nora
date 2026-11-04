@@ -14,7 +14,8 @@ backend/config, backend/apps/{accounts,organizations,catalog,inventory,purchasin
 - Store product images in configurable media storage; avoid committing customer images.
 - Prefer explicit APIs with version prefix /api/v1/.
 - Keep money in Decimal fields; capture immutable price/cost snapshots on transaction lines.
-- Offline writes require client-generated idempotency keys, server reconciliation and visible conflict states. Do not claim offline mode works without end-to-end tests.
+- Offline stock-movement writes use client-generated idempotency keys and a business/user-scoped local queue. The authenticated app retries queued requests on startup, restored connectivity, and foregrounding; permanent validation/permission conflicts are visible for review. This is foreground sync only, not a background worker, and has not passed physical-device E2E verification.
+- POS checkout remains online-only. Checkout idempotency keys are persisted server-side and exact retries return the original sale; reusing a key with a different payload is rejected.
 - Catalog and inventory reads/writes use `/api/v1/` for both browser sessions (CSRF-protected) and mobile JWTs. Derive business scope from the server-validated membership; never accept a client business ID as authority.
 - Inventory cost is weighted-average per variant. Batch quantity and immutable stock movement records are updated atomically; negative batch balances are rejected. Revisit the cost method only with an approved migration and reconciliation plan.
 

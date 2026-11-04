@@ -33,8 +33,9 @@ NorrisBeauty now uses a shared identity model for both the Django web app and th
 
 The Expo client uses a secure session store rather than AsyncStorage for auth secrets:
 
-- `mobile/lib/auth.ts` persists the access token, refresh token, role, and business metadata in Expo SecureStore.
+- `mobile/lib/auth.ts` persists the access token, refresh token, role, and business metadata in Expo SecureStore on native platforms. Expo Web keeps the session in memory only and requires reauthentication after a page reload; it does not persist browser tokens.
 - `mobile/app/components/AuthContext.tsx` hydrates the stored session on startup.
+- The authenticated provider retries user/business-scoped queued stock movements on app startup, connectivity restoration, and foregrounding. Queue contents are operational data in AsyncStorage, separate from auth secrets; they are not replayed under a different user/business.
 - `mobile/app/login.tsx` signs the user in through the shared Django API and routes them to the authenticated app shell.
 - Role-based mobile navigation follows the backend role and is not trusted from a client-only preview switch.
 
@@ -48,6 +49,6 @@ The Expo client uses a secure session store rather than AsyncStorage for auth se
 
 ## Current limitations
 
-- The mobile auth flow is implemented and secure at the device/session level, but it has not yet received full physical-device verification on a real Android handset.
+- The mobile auth and foreground queue lifecycle are implemented but have not yet received full physical-device verification on a real Android handset.
 - The permission system is centralized and ready for future custom roles, but it does not yet expose a user-configurable permission UI.
-- Purchasing, sales, and reporting remain demo-only. Phase 4 catalog/inventory endpoints are implemented; mobile supports live reads, while mobile write parity and device verification remain pending.
+- Mobile purchasing, customer management, and reporting remain incomplete. The POS now posts online checkout to the shared API; stock movement writes can queue locally for foreground retry. Expo physical-device verification remains pending.

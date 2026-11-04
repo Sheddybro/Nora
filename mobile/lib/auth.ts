@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 export type SessionRole = 'owner' | 'staff';
 
@@ -24,6 +25,14 @@ export interface AuthSession {
 
 const SESSION_KEY = 'norrisbeauty.auth.session';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '');
+let webSession: AuthSession | null = null;
+
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
 
 async function readJsonBody(response: Response): Promise<any> {
   const text = await response.text();
@@ -39,6 +48,10 @@ async function readJsonBody(response: Response): Promise<any> {
 }
 
 async function storeSession(session: AuthSession): Promise<void> {
+  if (Platform.OS === 'web') {
+    webSession = session;
+    return;
+  }
   await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
 }
 
@@ -47,6 +60,9 @@ export async function saveSession(session: AuthSession): Promise<void> {
 }
 
 export async function loadSession(): Promise<AuthSession | null> {
+  if (Platform.OS === 'web') {
+    return webSession;
+  }
   const raw = await SecureStore.getItemAsync(SESSION_KEY);
   if (!raw) {
     return null;
@@ -66,6 +82,10 @@ export async function loadSession(): Promise<AuthSession | null> {
 }
 
 export async function clearSession(): Promise<void> {
+  if (Platform.OS === 'web') {
+    webSession = null;
+    return;
+  }
   await SecureStore.deleteItemAsync(SESSION_KEY);
 }
 
@@ -97,7 +117,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, requir
 
     if (!retryResponse.ok) {
       const body = await readJsonBody(retryResponse);
-      throw new Error(body?.error?.message || body?.detail || 'The request was rejected.');
+      throw new ApiRequestError(body?.error?.message || body?.detail || 'The request was rejected.', retryResponse.status);
     }
 
     if (retryResponse.status === 204) {
@@ -108,7 +128,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, requir
 
   if (!response.ok) {
     const body = await readJsonBody(response);
-    throw new Error(body?.error?.message || body?.detail || `Request failed with ${response.status}`);
+    throw new ApiRequestError(body?.error?.message || body?.detail || `Request failed with ${response.status}`, response.status);
   }
 
   if (response.status === 204) {

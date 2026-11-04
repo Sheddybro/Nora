@@ -26,6 +26,8 @@ npx expo start --lan
 
 For Expo Go on a physical Android phone, connect the phone and computer to the same Wi-Fi and scan the QR code printed by Expo. Do not use `127.0.0.1` or `localhost` as the phone's API host; those addresses refer to the phone itself.
 
+The mobile app supports portrait and landscape orientation. If part of the phone touchscreen is unresponsive, rotate the phone and enable Android Auto-rotate; the sign-in form can scroll and adjusts when the keyboard opens. Restart Expo after changing orientation configuration.
+
 To check the computer's Wi-Fi IPv4 address, run `ipconfig` and read the IPv4 address under the active Wi-Fi adapter. During the 2026-10-29 verification this was `192.168.20.253`; it can change when DHCP renews.
 
 For a future phone-to-Django API connectivity test, set the current LAN IP in the project-root `.env` allowlist, for example:

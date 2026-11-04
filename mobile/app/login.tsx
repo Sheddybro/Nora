@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from './components/AuthContext';
@@ -56,7 +56,9 @@ export default function MobileLoginScreen() {
   };
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top', 'left', 'right']}>
-    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 25, paddingVertical: 28, gap: 16 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 25, paddingVertical: 28 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <View style={{ gap: 16 }}>
       <View style={{ alignItems: 'center', marginBottom: 8 }}><Text style={{ color: theme.ink, fontFamily: 'serif', fontSize: 28, fontWeight: '700' }}>✦ Norris<Text style={{ color: theme.rose }}>Beauty</Text></Text><Text style={{ color: theme.rose, fontSize: 9, fontWeight: '700', letterSpacing: 1.6, marginTop: 16 }}>BEAUTY BUSINESS, BEAUTIFULLY MANAGED</Text></View>
       <Text style={{ color: theme.ink, fontFamily: 'serif', fontSize: 26, fontWeight: '600' }}>Welcome back.</Text>
       <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 17 }}>Use your NorrisBeauty owner or staff credentials to connect the app to the shared Django backend.</Text>
@@ -66,6 +68,8 @@ export default function MobileLoginScreen() {
       <Pressable accessibilityRole="button" disabled={loading} onPress={handleLogin} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: loading ? theme.line : theme.rose }}><Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{loading ? 'Signing in...' : 'Sign in'}</Text></Pressable>
       {session ? <Pressable accessibilityRole="button" onPress={handleLogout} style={{ minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1, borderColor: theme.line, backgroundColor: theme.card }}><Text style={{ color: theme.ink, fontSize: 10, fontWeight: '600' }}>Log out</Text></Pressable> : null}
       <Text accessibilityLiveRegion="polite" style={{ color: theme.muted, fontSize: 9, lineHeight: 15 }}>{message}</Text>
-    </View>
+      </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   </SafeAreaView>;
 }

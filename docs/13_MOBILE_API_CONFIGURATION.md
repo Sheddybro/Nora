@@ -41,4 +41,8 @@ DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.10
 
 ## Security note
 
-The app stores only the session payload in Expo SecureStore and does not write credentials into AsyncStorage or plain text files.
+Native app sessions are stored in Expo SecureStore and credentials are not written to AsyncStorage or plain text files. Expo Web uses volatile in-memory session state only; a page reload requires a new sign-in.
+
+## Mobile offline behavior
+
+The app stores pending stock movements in AsyncStorage, scoped to the authenticated user and business, and retries them when the authenticated app starts, connectivity returns, or the app is foregrounded. Exact request payloads and idempotency keys are retained for server replay. Permanent validation or permission errors are shown as conflicts for review. POS checkout requires a live connection. This is foreground-only behavior and still requires physical-device E2E verification; it is not a background sync guarantee.

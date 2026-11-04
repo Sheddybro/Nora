@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
+import * as Network from 'expo-network';
 import { loadSession, loginWithCredentials, logoutSession, type AuthSession } from '../../lib/auth';
+import { syncQueuedMutations } from '../../lib/offlineQueue';
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -36,6 +39,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    const syncIfOnline = async () => {
+      try {
+        const network = await Network.getNetworkStateAsync();
+        if (network.isConnected && network.isInternetReachable !== false) {
+          await syncQueuedMutations(session);
+        }
+      } catch {
+        // Keep queued writes for the next connectivity or foreground event.
+      }
+    };
+    const networkSubscription = Network.addNetworkStateListener((network) => {
+      if (network.isConnected && network.isInternetReachable !== false) void syncIfOnline();
+    });
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncIfOnline();
+    });
+    void syncIfOnline();
+    return () => {
+      networkSubscription.remove();
+      appStateSubscription.remove();
+    };
+  }, [session]);
 
   const value = useMemo<AuthContextValue>(() => ({
     session,

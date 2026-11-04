@@ -1,0 +1,42 @@
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'core/models.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'core/tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'core/urls.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/02_ARCHITECTURE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/03_PHASES.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/07_DATA_AND_SECURITY.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/10_SETUP_WINDOWS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/app.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/app/_layout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/package.json', LF will be replaced by CRLF the next time Git touches it
+README.md
+core/api_serializers.py
+core/api_views.py
+core/inventory_services.py
+core/models.py
+core/tests.py
+core/urls.py
+docs/02_ARCHITECTURE.md
+docs/03_PHASES.md
+docs/07_DATA_AND_SECURITY.md
+docs/10_SETUP_WINDOWS.md
+docs/11_AUTHENTICATION.md
+docs/12_PERMISSION_MATRIX.md
+docs/13_MOBILE_API_CONFIGURATION.md
+docs/14_CATALOG_INVENTORY_API.md
+docs/verification/phase4/REPORT.md
+mobile/app.json
+mobile/app/_layout.tsx
+mobile/app/catalog.tsx
+mobile/app/components/AuthContext.tsx
+mobile/app/customers.tsx
+mobile/app/inventory.tsx
+mobile/app/login.tsx
+mobile/app/more.tsx
+mobile/app/more/[module].tsx
+mobile/app/pos.tsx
+mobile/lib/auth.ts
+mobile/lib/catalog.ts
+mobile/package-lock.json
+mobile/package.json

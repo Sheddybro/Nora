@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, useMobileTheme } from '../components/NativeWorkspaceScreen';
 import { usePreviewRole } from '../components/MobileRoleContext';
 import { Redirect } from 'expo-router';
+import PurchasingWorkspace from '../components/PurchasingWorkspace';
 
 const screens: Record<string, { eyebrow: string; title: string; description: string; rows: [string, string, string][] }> = {
   purchases: { eyebrow: 'PROCUREMENT', title: 'Purchases & suppliers', description: 'Supplier and purchase order interface preview. No orders can be placed or received.', rows: [['⇄', 'Open purchase orders', 'Demo state · 4 sample records'], ['◎', 'Suppliers', 'Demo directory · 18 sample entries'], ['＋', 'Create purchase order', 'Not connected to inventory']] },
@@ -16,6 +17,7 @@ export default function ManagementScreen() {
   const { module } = useLocalSearchParams<{ module: string }>();
   const { role } = usePreviewRole();
   if (role !== 'owner') return <Redirect href="/" />;
+  if (module === 'purchases') return <PurchasingWorkspace />;
   const screen = screens[module || ''] || screens.settings;
   const theme = useMobileTheme();
   return <NativeWorkspaceScreen eyebrow={screen.eyebrow} title={screen.title} description={screen.description}>

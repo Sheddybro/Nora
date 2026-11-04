@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { MobileRoleContext, type PreviewRole } from './components/MobileRoleContext';
 
@@ -27,11 +27,12 @@ const staffTabs = [
 ];
 
 function MobileTabBar({ state, navigation, role, colors }) {
+	const insets = useSafeAreaInsets();
 	const allowed = role === 'owner' ? ownerTabs : staffTabs;
 	const enabled = new Set(allowed.map((tab) => tab.name));
 
 	return (
-		<View style={{ flexDirection: 'row', backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, paddingTop: 7, paddingBottom: 8 }}>
+		<View style={{ flexDirection: 'row', backgroundColor: colors.surface, borderTopColor: colors.line, borderTopWidth: 1, paddingTop: 7, paddingBottom: Math.max(insets.bottom, 8) }}>
 			{state.routes.filter((route) => enabled.has(route.name)).map((route) => {
 				const tab = allowed.find((item) => item.name === route.name);
 				const focused = state.routes[state.index]?.name === route.name;

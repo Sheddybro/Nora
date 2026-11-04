@@ -37,6 +37,15 @@ export type InventoryStock = {
 
 export type StockLocation = { id: number; name: string; is_active: boolean };
 
+export type SaleReceipt = {
+  id: number;
+  invoice_number: string;
+  status: string;
+  total: string;
+  paid_amount: string;
+  change_amount: string;
+};
+
 export async function createProduct(payload: {
   name: string;
   description?: string;
@@ -73,12 +82,42 @@ export async function createStockMovement(payload: {
   return apiRequest('/inventory/movements/', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function searchProducts(query: string): Promise<Product[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return fetchProducts();
+  }
+
+  const response = await apiRequest<{ results: Product[] }>(`/catalog/products/?search=${encodeURIComponent(trimmed)}`);
+  return response.results;
+}
+
+export async function searchProductsByBarcode(barcode: string): Promise<Product[]> {
+  const trimmed = barcode.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const response = await apiRequest<{ results: Product[] }>(`/catalog/products/?barcode=${encodeURIComponent(trimmed)}`);
+  return response.results;
+}
+
 export async function fetchProducts(): Promise<Product[]> {
-  const response = await apiRequest<{ results: Product[] }>('/catalog/products/');
+  const response = await apiRequest<{ results: Product[] }>('/catalog/products/?limit=100');
   return response.results;
 }
 
 export async function fetchInventoryStock(): Promise<InventoryStock[]> {
   const response = await apiRequest<{ results: InventoryStock[] }>('/inventory/stock/');
   return response.results;
+}
+
+export async function checkoutSale(payload: {
+  location_id: number;
+  items: { variant_id: number; quantity: number; unit_price: string }[];
+  payment_method: 'cash' | 'card' | 'bank_transfer' | 'wallet';
+  amount_paid: string;
+  idempotency_key: string;
+}): Promise<SaleReceipt> {
+  return apiRequest<SaleReceipt>('/pos/checkout/', { method: 'POST', body: JSON.stringify(payload) });
 }

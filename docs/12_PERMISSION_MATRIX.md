@@ -41,6 +41,7 @@
 - `GET /api/v1/inventory/locations/` and `GET /api/v1/inventory/stock/` require `inventory.view`.
 - `POST /api/v1/inventory/locations/` and `POST /api/v1/inventory/movements/` require `inventory.adjust`.
 - `GET /api/v1/inventory/movements/` requires `inventory.view`.
+- `GET /api/v1/customers/` requires `customers.view` and returns only active customers for the authenticated business, with search and pagination.
 - Browser session writes additionally require a valid CSRF token. Mobile calls use the membership-bound JWT.
 
 ## Security model

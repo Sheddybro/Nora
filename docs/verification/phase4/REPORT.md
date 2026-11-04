@@ -1,48 +1,48 @@
 # Phase 4 verification report
 
-## Scope
+## Status
 
-Catalog and inventory vertical slice across Django, versioned API, browser UI, and Expo read screens. Phase 4 is **in progress, not accepted**; see limitations below.
+**ACCEPTED BY USER — manual verification reported complete.** The user confirmed that the remaining product-photo, stock-adjustment, and desktop/tablet checks all worked and explicitly approved proceeding to Phase 5. No desktop/tablet screenshots were attached to the session, so this report records those checks as user-reported rather than independently evidenced.
 
-## Implementation
+## Scope verified
 
-- Business-scoped categories, products, variants (SKU/barcode, price, cost, reorder point), external product-image metadata, stock locations, expiry batches, and stock movement ledger.
-- Authenticated `/api/v1/catalog/*` and `/api/v1/inventory/*` routes, scoped through active membership. Web calls use session auth with CSRF on writes; mobile calls use membership-bound JWTs.
-- Owner-only catalog and inventory writes; Staff defaults to read-only catalog and stock.
-- Atomic/idempotent stock movements, nonnegative batch balances, immutable batch expiry/cost, and weighted-average per-variant valuation.
-- Web product creation and stock receipt/adjustment forms; mobile catalog and inventory reads with API error and empty states.
+- Business-scoped catalog, variants, stock locations, batches, and movement ledger.
+- Owner-authorized product/image and inventory writes; Staff reads remain restricted by backend permissions.
+- Product-image validation and configurable media storage.
+- Atomic, idempotent stock movements, nonnegative batch balances, and weighted-average valuation.
+- Expo catalog/inventory screens wired to the versioned API.
+- Mobile config now permits portrait/landscape rotation; login is scrollable and keyboard-aware. This adjustment was made after the listed baseline source revision and still requires device verification.
+- Custom bottom tabs now reserve the Android/iOS bottom safe-area inset to avoid overlapping system navigation controls; physical-device verification remains pending.
 
 ## Automated verification
 
-> Test-runner note: the Django `auth_login` throttle is intentionally raised to `100/minute` when the suite is invoked via `manage.py test` so the same local test IP does not false-trigger 429 responses while exercising the real auth flow. Production remains locked to the stricter `10/minute` limit.
+Phase: 4 | Commit: `efc69e4e4f2311a4902936473091251fc09ad820` | Date: 2026-11-04 | Environment: Windows, project virtualenv, Node/Expo dependencies already installed.
 
 | Check | Result |
 |---|---|
-| `python manage.py test core.tests` | Passed: 23 tests, 0 failures. Includes auth regression, role and tenant authorization, CSRF, catalog creation, duplicate validation, stock idempotency, weighted-average cost, and inventory/web rendering. |
-| `python manage.py check` | Passed: no issues. |
-| `python manage.py makemigrations --check --dry-run` | Passed: no model changes pending migration. |
-| `python manage.py migrate --check` | Passed after applying `0003` and `0004` to the local development database. |
-| `node --check static/js/app.js` | Passed: no JavaScript syntax errors. |
-| `cd mobile; npx tsc --noEmit` | Passed: no TypeScript diagnostics. |
-| `cd mobile; npx expo export --platform android --clear` | Passed: Android Hermes bundle exported (2.59 MB). |
-| Browser owner create-product then receive-stock workflow | Passed: API-backed product/category/variant created; stock location created; 10 units received; live inventory reflected 10 units and ₦500.00 valuation. Temporary verification data was removed. |
-| Browser screenshot viewport metrics | Partial: 390px screenshots render, but this browser reports inconsistent `innerWidth`/`clientWidth` after navigation; no numeric no-overflow claim is made. Desktop screenshot capture was blank in the integrated browser, so invalid captures were removed. |
+| `.\.venv\Scripts\python.exe manage.py test core.tests` | PASS — 32 tests, 0 failures, 88.234 seconds. Includes authorization, tenant scope, CSRF, uploads, validation, stock idempotency, weighted-average cost, and web rendering. |
+| `.\.venv\Scripts\python.exe manage.py check` | PASS — no issues. |
+| `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` | PASS — no model changes pending. |
+| `.\.venv\Scripts\python.exe manage.py migrate` | PASS — applied core migrations `0005`, `0006`, and `0007` to the local development database. SKU/barcode duplicate preflight returned no duplicates. |
+| `.\.venv\Scripts\python.exe manage.py migrate --check` | PASS after applying the pending migrations. The initial check correctly returned nonzero because those three migrations were pending. |
+| `cd mobile; npx tsc --noEmit` | PASS — no TypeScript diagnostics. |
+| `cd mobile; npx expo export --platform android --output-dir $env:TEMP\norrisbeauty-expo-export` | PASS — Android Hermes bundle exported (2.62 MB) to a temporary directory outside the repository. |
+| Mobile login/orientation update: `cd mobile; npx tsc --noEmit` | PASS — no TypeScript diagnostics. |
+| Mobile login/orientation update: `cd mobile; npx expo export --platform android --output-dir $env:TEMP\norrisbeauty-rotation-export` | PASS — Android Hermes bundle exported (2.62 MB). |
+| Bottom-tab safe-area update: `cd mobile; npx tsc --noEmit` | PASS — no TypeScript diagnostics. |
+| Bottom-tab safe-area update: `cd mobile; npx expo export --platform android --output-dir $env:TEMP\norrisbeauty-footer-export` | PASS — Android Hermes bundle exported (2.62 MB). |
+| Authorization/image security tests within `core.tests` | PASS — default Staff write denial, business isolation, CSRF, image type/size validation, and unauthorized image upload are covered. This is not a production security audit. |
 
 ## Manual and visual verification
 
-- Local browser login, empty Products and Inventory states, and owner form interactions: verified.
-- Mobile-sized screenshots (390px): [Products](products-390.png), [Inventory](inventory-390.png).
-- Desktop screenshot capture failed in the integrated browser despite correct DOM/accessibility snapshots; no desktop screenshot is claimed.
-- Physical-device Expo API access and authenticated mobile data rendering: pending.
-
-## Limitations
-
-- Product photos store external URL and alt-text metadata only; secure upload/media storage is not implemented.
-- Mobile supports live reads, but no mobile product creation or stock movement workflow yet.
-- Category/location forms are basic; editing/deactivation, audit history UI, barcode capture, pagination, and offline behavior are not implemented.
-- PostgreSQL concurrency semantics and production security are not exercised here.
-- Phase 4 acceptance requires uploaded image storage, Expo mobile write workflows, reliable desktop and tablet screenshot evidence, physical-device verification, and reviewer approval.
+- Physical Android: user-provided screenshots confirm successful owner sign-in, live catalog display, and a receipt of 2 test units at `Mobile Test Store`. The stock screen showed 2 units and NGN 2.00 valuation. The custom tab bar is visually separated from Android's system navigation in the screenshots.
+- User additionally confirmed product photo upload, stock adjustment, and desktop/tablet review worked. No screenshot artifacts for those checks were supplied; results are attributed to the user.
+- The existing 390px web captures are available: [Products](products-390.png) and [Inventory](inventory-390.png). They were not recaptured in this verification pass.
+- The prior report records a browser owner create-product/receive-stock workflow; it was not repeated in this pass.
+- Landscape rotation was not specifically confirmed.
+- A desktop Expo Web capture was attempted but could not start because `react-native-web` is not installed; no UI screenshot is claimed for the login layout change.
+- Automated checks recorded above had no failures; initial `migrate --check` was blocked only by the expected pending migrations and passed after they were applied.
 
 ## Decision
 
-**IN PROGRESS. Do not start Phase 5 until Phase 4 exit criteria are completed and accepted.**
+**ACCEPTED by user confirmation on 2026-11-04.** Automated checks pass. The user reports the remaining manual and responsive checks passed; screenshot artifacts were not supplied. Proceed to Phase 5.

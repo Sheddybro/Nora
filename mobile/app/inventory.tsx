@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
-import { createStockMovement, fetchInventoryStock, fetchProducts, fetchStockLocations, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
+import { createStockMovement, fetchInventoryStock, fetchProducts, fetchStockLocations, searchProductsByBarcode, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
+import { buildIdempotencyKey, getQueuedMutations, queueOfflineMutation, removeQueuedMutation, subscribeToQueue, type OfflineMutation } from '../lib/offlineQueue';
 import { useAuth } from './components/AuthContext';
 
 export default function InventoryScreen() {
@@ -20,14 +21,52 @@ export default function InventoryScreen() {
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [reason, setReason] = useState('');
+  const [barcodeQuery, setBarcodeQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingQueue, setPendingQueue] = useState<OfflineMutation[]>([]);
 
-  const refresh = () => Promise.all([fetchInventoryStock(), fetchProducts(), fetchStockLocations()]).then(([nextStock, nextProducts, nextLocations]) => {
+  const refresh = () => Promise.all([fetchInventoryStock(), fetchProducts(), fetchStockLocations(), getQueuedMutations()]).then(([nextStock, nextProducts, nextLocations, nextQueue]) => {
     setStock(nextStock); setProducts(nextProducts); setLocations(nextLocations);
+    setPendingQueue(session ? nextQueue.filter((item) => item.userId === session.user.id && item.businessId === session.business.id) : []);
     setVariantId((current) => current || nextProducts.flatMap((product) => product.variants).find((variant) => variant.is_active)?.id || 0);
     setLocationId((current) => current || nextLocations[0]?.id || 0);
   }).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    const refreshQueue = () => {
+      void getQueuedMutations(session.user.id, session.business.id)
+        .then(setPendingQueue)
+        .catch((requestError: Error) => setError(requestError.message));
+    };
+    refreshQueue();
+    return subscribeToQueue(refreshQueue);
+  }, [session]);
+
+  const lookupBarcode = async () => {
+    const trimmed = barcodeQuery.trim();
+    if (!trimmed) {
+      setError('Enter a barcode to find the matching product variant.');
+      return;
+    }
+
+    try {
+      const matches = await searchProductsByBarcode(trimmed);
+      const variant = matches.flatMap((product) => product.variants).find((candidate) => candidate.barcode?.trim().toLowerCase() === trimmed.toLowerCase()) || matches.flatMap((product) => product.variants)[0];
+      if (!variant) {
+        setError('No product matches this barcode.');
+        return;
+      }
+
+      setProducts((current) => current.some((product) => product.id === matches[0]?.id) ? current : [...current, ...matches]);
+      setVariantId(variant.id);
+      setError('');
+      Alert.alert('Barcode match', `${variant.sku} selected for stock movement.`);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    }
+  };
 
   const units = stock.reduce((total, item) => total + item.quantity, 0);
   const value = stock.reduce((total, item) => total + Number(item.valuation), 0);
@@ -40,12 +79,36 @@ export default function InventoryScreen() {
     }
     if (kind === 'receipt' && (parsedQuantity < 1 || !unitCost.trim())) { setError('Receipts need a positive quantity and unit cost.'); return; }
     setIsSaving(true); setError('');
+    const idempotencyKey = buildIdempotencyKey('mobile-stock');
+    const payload = {
+      kind,
+      variant_id: variantId,
+      location_id: locationId,
+      batch_number: batchNumber.trim(),
+      quantity_delta: parsedQuantity,
+      ...(kind === 'receipt' ? { unit_cost: unitCost.trim() } : {}),
+      reason: reason.trim(),
+      idempotency_key: idempotencyKey,
+    };
     try {
-      await createStockMovement({ kind, variant_id: variantId, location_id: locationId, batch_number: batchNumber.trim(), quantity_delta: parsedQuantity, ...(kind === 'receipt' ? { unit_cost: unitCost.trim() } : {}), reason: reason.trim(), idempotency_key: `${Date.now()}-${Math.random().toString(36).slice(2)}` });
+      await createStockMovement(payload);
       setQuantity(''); setReason('');
       await refresh();
       Alert.alert('Stock updated', 'The movement has been recorded in the business ledger.');
-    } catch (requestError) { setError((requestError as Error).message); }
+    } catch (requestError) {
+      const message = (requestError as Error).message;
+      const status = (requestError as Error & { status?: number }).status;
+      const isLikelyOffline = status === undefined || status >= 500 || status === 429;
+      if (isLikelyOffline) {
+        if (!session) throw requestError;
+        await queueOfflineMutation({ userId: session.user.id, businessId: session.business.id, resource: '/inventory/movements/', method: 'POST', payload, idempotencyKey });
+        setPendingQueue(await getQueuedMutations(session.user.id, session.business.id));
+        setError('Offline queue saved. The movement will sync when connectivity returns.');
+        Alert.alert('Offline sync queued', 'The movement was stored locally and will be reconciled with the server when the device reconnects.');
+      } else {
+        setError(message);
+      }
+    }
     finally { setIsSaving(false); }
   };
 
@@ -57,6 +120,17 @@ export default function InventoryScreen() {
         ['Stock lines', stock.length.toLocaleString('en-NG')],
       ].map(([label, amount]) => <View key={label} style={[nativeStyles.stat, { borderBottomColor: theme.line }]}><Text style={[nativeStyles.statLabel, { color: theme.muted }]}>{label}</Text><Text style={[nativeStyles.statValue, { color: theme.ink }]}>{amount}</Text></View>)}
       {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
+    </MobilePanel>
+    <MobilePanel eyebrow="OFFLINE QUEUE" title={`Queued changes · ${pendingQueue.length}`}>
+      {pendingQueue.length ? pendingQueue.map((item) => <View key={item.id} style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: theme.line }}>
+        <Text style={{ color: theme.ink, fontSize: 10, fontWeight: '700' }}>{item.status === 'conflict' ? 'Needs review' : 'Waiting to sync'} · {item.resource}</Text>
+        {item.conflict ? <Text style={{ color: theme.rose, fontSize: 9, lineHeight: 14, marginTop: 4 }}>{item.conflict}</Text> : <Text style={{ color: theme.muted, fontSize: 9, marginTop: 4 }}>{new Date(item.createdAt).toLocaleString()}</Text>}
+        {item.status === 'conflict' ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss conflicted stock movement" onPress={async () => { await removeQueuedMutation(item.id); setPendingQueue(await getQueuedMutations(session?.user.id, session?.business.id)); }} style={[nativeStyles.button, { alignSelf: 'flex-start', marginTop: 6, borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 10 }}>Dismiss conflict</Text></Pressable> : null}
+      </View>) : <Text style={{ color: theme.muted, fontSize: 10 }}>No pending offline changes.</Text>}
+    </MobilePanel>
+    <MobilePanel eyebrow="BARCODE LOOKUP" title="Find a variant">
+      <TextInput accessibilityLabel="Barcode lookup" placeholder="Type or scan a barcode" value={barcodeQuery} onChangeText={setBarcodeQuery} placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
+      <Pressable accessibilityRole="button" onPress={lookupBarcode} style={[nativeStyles.button, { borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 11, fontWeight: '700' }}>Lookup barcode</Text></Pressable>
     </MobilePanel>
     <MobilePanel eyebrow="BUSINESS LOCATIONS" title="Stock by product">{isLoading ? <View style={nativeStyles.empty}><Text style={[nativeStyles.emptyText, { color: theme.muted }]}>Loading inventory…</Text></View> : stock.length ? stock.map((item) => {
       const needsReorder = item.reorder_point > 0 && item.quantity <= item.reorder_point;

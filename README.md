@@ -11,12 +11,14 @@
 
 ## What's actually implemented
 - Django project configuration; environment-based database settings; DRF health endpoint; business and membership model; owner/staff default permissions; secure shared JWT auth flow; password reset routes; branded responsive dashboard shell; CSS dark mode toggle; Django tests for login and permission boundaries.
-- Phase 4 catalog/inventory foundation: business-scoped categories, products, variants, image metadata, locations, expiry batches and stock ledger; authenticated `/api/v1` endpoints; owner-only catalog and stock writes; API-backed web forms and Expo catalog/stock reads.
+- Phase 4 catalog/inventory foundation: business-scoped categories, products, variants, validated product-image uploads, locations, expiry batches and stock ledger; authenticated `/api/v1` endpoints; owner writes by default with server-validated explicit staff permissions; API-backed web forms and Expo catalog/stock reads and owner write flows.
+- Phases 5–8 backend workflows: suppliers and purchase orders, atomic sales checkout/refunds, transfers/stocktakes/alerts, expenses/reports/audit events/notifications, all exposed through the shared versioned API and covered by Django regression tests.
+- Phase 9 mobile progress: live barcode-aware catalog and stock screens, stock-aware mobile POS checkout with server-enforced idempotency, business-scoped customer listing, owner supplier/purchase-order lifecycle flows with idempotent create/receive, and a business/user-scoped local stock-movement queue that retries on app start, connectivity restoration, and foregrounding.
 - Expo React Native client with secure credential/session storage via Expo SecureStore and a real auth context that consumes the shared Django backend.
 - 15 reference crops + full visual collage; design system; acceptance matrix and prompts.
 
 ## What's not implemented
-Full production tenant provisioning, granular permission configuration UI, supplier purchasing, sales/POS/payment APIs, transfers and stocktakes, offline sync, uploaded image storage, and fully device-tested Expo workflows on a physical Android handset. Dashboard and non-catalog/inventory screens still contain demo-only surfaces until their modules are implemented.
+Full production tenant provisioning, granular permission configuration UI, background sync, customer creation, purchasing order editing/multi-line composition, and physical-device verification of Expo workflows. The mobile stock queue syncs only while the app is running and authenticated; POS sales remain online-only because queued checkout has not received device/E2E validation. Some dashboard and finance screens remain demo-only.
 
 ## Visual samples
 `design/references/` contains generated inspiration images. Some cropped collage samples are low-resolution and small text is illustrative only. `design/references/00_full_design_board.png` is the source image. Rebuild with real UI components.
@@ -28,4 +30,4 @@ Full production tenant provisioning, granular permission configuration UI, suppl
 - `python manage.py runserver` then `/health/`, `/api/v1/health/`, `/login/`, `/`
 - `cd mobile && npm install && npx expo start` (requires Node/npm; verify on device)
 
-No Django/Expo execution is claimed by this package creation environment; run commands locally and record results.
+Phase-specific verification evidence and remaining limitations are recorded in `docs/verification/phase4/REPORT.md`.

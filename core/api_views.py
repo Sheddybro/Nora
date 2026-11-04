@@ -8,18 +8,23 @@ from django.db import models
 from django.db.models import Sum
 from django.db.models import Q
 from django.core.paginator import Paginator
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .api_serializers import CategorySerializer, MembershipTokenObtainPairSerializer, PasswordChangeInputSerializer, ProductImageSerializer, ProductSerializer, RefreshTokenInputSerializer, StockLocationSerializer, StockMovementInputSerializer, UserSummarySerializer
-from .inventory_services import record_stock_movement
-from .models import Batch, Category, Membership, Product, ProductImage, ProductVariant, StockLocation, StockMovement
+from .api_serializers import AdjustmentSerializer, AuditEventSerializer, CategorySerializer, CheckoutSaleSerializer, CustomerSerializer, ExpenseSerializer, InventoryAlertSerializer, MembershipTokenObtainPairSerializer, NotificationSerializer, PasswordChangeInputSerializer, ProductImageSerializer, ProductSerializer, PurchaseOrderCancelSerializer, PurchaseOrderReceiveSerializer, PurchaseOrderSerializer, RefreshTokenInputSerializer, SaleRefundSerializer, SaleSerializer, StockLocationSerializer, StockMovementInputSerializer, StockTakeSerializer, SupplierSerializer, TransferSerializer, UserSummarySerializer
+from .finance_services import business_finance_summary, create_expense, record_audit_event, create_notification
+from .inventory_services import _active_inventory_alerts, record_stock_movement, record_stocktake, record_transfer
+from .models import Adjustment, AuditEvent, Batch, Category, Customer, Expense, InventoryAlert, Membership, Notification, Product, ProductImage, ProductVariant, PurchaseOrder, Sale, StockLocation, StockMovement, StockTake, Supplier, Transfer
 from .permissions import BusinessPermission, BusinessSettingsPermission, membership_has_permission, membership_permissions
+from .purchasing_services import cancel_purchase_order, place_purchase_order, receive_purchase_order_line
+from .sales_services import checkout_sale, refund_sale
 
 
 class AuthLoginThrottle(AnonRateThrottle):
@@ -38,6 +43,34 @@ class InventoryEndpointPermission(BusinessPermission):
         code = "inventory.adjust" if request.method == "POST" else "inventory.view"
         membership = getattr(request.user, "active_membership", None)
         return bool(request.user and request.user.is_authenticated and membership_has_permission(membership, code))
+
+
+class SalesListPermission(BusinessPermission):
+    permission_code = "sales.view"
+
+
+class CustomersListPermission(BusinessPermission):
+    permission_code = "customers.view"
+
+
+class PosCheckoutPermission(BusinessPermission):
+    permission_code = "pos.use"
+
+
+class PurchasingEndpointPermission(BusinessPermission):
+    permission_code = "purchases.manage"
+
+    def has_permission(self, request, view):
+        membership = getattr(request.user, "active_membership", None)
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and membership_has_permission(membership, self.permission_code)
+        )
+
+
+class ReportsEndpointPermission(BusinessPermission):
+    permission_code = "reports.view"
 
 
 @api_view(["POST"])
@@ -119,6 +152,51 @@ def business_profile(request):
 
 
 @api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, ReportsEndpointPermission])
+def expenses(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = ExpenseSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        expense = create_expense(business=business, actor=request.user, data=serializer.validated_data)
+        return Response(ExpenseSerializer(expense, context={"request": request}).data, status=status.HTTP_201_CREATED)
+    queryset = Expense.objects.filter(business=business).select_related("created_by").order_by("-expense_date", "-id")
+    return Response({"count": queryset.count(), "results": ExpenseSerializer(queryset, many=True, context={"request": request}).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, ReportsEndpointPermission])
+def report_summary(request):
+    business = request.user.active_membership.business
+    summary = business_finance_summary(business)
+    return Response({
+        "sales_total": str(summary["sales_total"]),
+        "purchase_total": str(summary["purchase_total"]),
+        "expense_total": str(summary["expense_total"]),
+        "net": str(summary["net"]),
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, ReportsEndpointPermission])
+def audit_events(request):
+    business = request.user.active_membership.business
+    queryset = AuditEvent.objects.filter(business=business).select_related("actor").order_by("-created_at", "-id")
+    return Response({"count": queryset.count(), "results": AuditEventSerializer(queryset, many=True, context={"request": request}).data})
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def notifications(request):
+    membership = request.user.active_membership
+    if request.method == "PATCH":
+        updated = Notification.objects.filter(business=membership.business, user=request.user, is_read=False).update(is_read=True, read_at=timezone.now())
+        return Response({"updated": updated})
+    queryset = Notification.objects.filter(business=membership.business, user=request.user).order_by("-created_at", "-id")
+    return Response({"count": queryset.count(), "results": NotificationSerializer(queryset, many=True, context={"request": request}).data})
+
+
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated, CatalogEndpointPermission])
 def catalog_products(request):
     business = request.user.active_membership.business
@@ -132,8 +210,12 @@ def catalog_products(request):
     products = Product.objects.filter(business=business).select_related("category").prefetch_related("variants", "images")
     if request.query_params.get("include_inactive") != "true" or request.user.active_membership.role != Membership.OWNER:
         products = products.filter(is_active=True)
-    query = request.query_params.get("search", "").strip()
-    if query:
+    barcode = request.query_params.get("barcode", "").strip()
+    if barcode:
+        products = products.filter(variants__barcode__iexact=barcode).distinct()
+    else:
+        query = request.query_params.get("search", "").strip()
+    if not barcode and query:
         products = products.filter(Q(name__icontains=query) | Q(variants__sku__icontains=query) | Q(variants__barcode__icontains=query)).distinct()
     if request.query_params.get("category"):
         products = products.filter(category_id=request.query_params["category"])
@@ -323,6 +405,117 @@ def inventory_stock(request):
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated, InventoryEndpointPermission])
+def inventory_transfers(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = TransferSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        try:
+            transfer = record_transfer(
+                business=business,
+                actor=request.user,
+                variant_id=serializer.validated_data["variant"].pk,
+                from_location_id=serializer.validated_data["from_location"].pk,
+                to_location_id=serializer.validated_data["to_location"].pk,
+                quantity=serializer.validated_data["quantity"],
+                reason=serializer.validated_data["reason"],
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        return Response(TransferSerializer(transfer, context={"request": request}).data, status=status.HTTP_201_CREATED)
+    transfers = Transfer.objects.filter(business=business).select_related("variant", "from_location", "to_location", "created_by")
+    return Response({"results": TransferSerializer(transfers, many=True, context={"request": request}).data})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, InventoryEndpointPermission])
+def inventory_adjustments(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = AdjustmentSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        adjustment = Adjustment.objects.create(
+            business=business,
+            variant=serializer.validated_data["variant"],
+            location=serializer.validated_data["location"],
+            batch=serializer.validated_data.get("batch"),
+            quantity_delta=serializer.validated_data["quantity_delta"],
+            reason=serializer.validated_data["reason"],
+            created_by=request.user,
+        )
+        return Response(AdjustmentSerializer(adjustment, context={"request": request}).data, status=status.HTTP_201_CREATED)
+    adjustments = Adjustment.objects.filter(business=business).select_related("variant", "location", "batch", "created_by")
+    return Response({"results": AdjustmentSerializer(adjustments, many=True, context={"request": request}).data})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, InventoryEndpointPermission])
+def inventory_stocktakes(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        payload = request.data.copy()
+        items = payload.pop('items', None)
+        if items is None:
+            items = payload.pop('lines', None)
+        if not items:
+            return Response({"detail": "A stocktake must include items."}, status=status.HTTP_400_BAD_REQUEST)
+        normalized = []
+        for item in items:
+            if isinstance(item, dict):
+                normalized.append({
+                    'variant_id': item.get('variant_id') or item.get('variant'),
+                    'counted_quantity': item.get('counted_quantity', item.get('quantity', 0)),
+                })
+        try:
+            stocktake = record_stocktake(
+                business=business,
+                actor=request.user,
+                location_id=request.data.get('location_id'),
+                items=normalized,
+                reason=request.data.get('reason', 'Inventory count'),
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'id': stocktake.pk,
+            'location_id': stocktake.location_id,
+            'reason': stocktake.reason,
+            'lines': [{
+                'variant_id': line.variant_id,
+                'expected_quantity': line.expected_quantity,
+                'counted_quantity': line.counted_quantity,
+                'quantity_delta': line.quantity_delta,
+            } for line in stocktake.lines.all()],
+        }, status=status.HTTP_201_CREATED)
+    stocktakes = StockTake.objects.filter(business=business).select_related("location", "created_by").prefetch_related("lines__variant")
+    return Response({"results": [{
+        'id': stocktake.pk,
+        'location_id': stocktake.location_id,
+        'reason': stocktake.reason,
+        'created_at': stocktake.created_at,
+        'lines': [{'variant_id': line.variant_id, 'expected_quantity': line.expected_quantity, 'counted_quantity': line.counted_quantity, 'quantity_delta': line.quantity_delta} for line in stocktake.lines.all()],
+    } for stocktake in stocktakes]})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, InventoryEndpointPermission])
+def inventory_alerts(request):
+    business = request.user.active_membership.business
+    alerts = _active_inventory_alerts(business)
+    return Response({"results": [{
+        'id': alert.pk,
+        'variant_id': alert.variant_id,
+        'location_id': alert.location_id,
+        'current_quantity': alert.current_quantity,
+        'reorder_point': alert.reorder_point,
+        'severity': alert.severity,
+        'message': alert.message,
+        'is_resolved': alert.is_resolved,
+    } for alert in alerts]})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, InventoryEndpointPermission])
 def inventory_movements(request):
     business = request.user.active_membership.business
     if request.method == "POST":
@@ -357,6 +550,186 @@ def inventory_movements(request):
         "actor": movement.actor.get_username() if movement.actor else None,
         "created_at": movement.created_at,
     } for movement in movements]})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, SalesListPermission])
+def sales_list(request):
+    business = request.user.active_membership.business
+    sales = Sale.objects.filter(business=business).select_related("location", "customer", "created_by").prefetch_related("lines__variant")
+    return Response({"results": SaleSerializer(sales, many=True, context={"request": request}).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, CustomersListPermission])
+def customers_list(request):
+    business = request.user.active_membership.business
+    customers = Customer.objects.filter(business=business, is_active=True)
+    query = request.query_params.get("search", "").strip()
+    if query:
+        customers = customers.filter(Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query))
+    try:
+        limit = int(request.query_params.get("limit", 25))
+        requested_page = int(request.query_params.get("page", 1))
+    except ValueError:
+        return Response({"detail": "Page and limit must be integers."}, status=status.HTTP_400_BAD_REQUEST)
+    paginator = Paginator(customers.order_by("name", "id"), min(max(limit, 1), 100))
+    page = paginator.get_page(requested_page)
+    return Response({"count": paginator.count, "page": page.number, "pages": paginator.num_pages, "results": CustomerSerializer(page.object_list, many=True).data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, PosCheckoutPermission])
+def sales_checkout(request):
+    serializer = CheckoutSaleSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    line_items = []
+    for item in serializer.validated_data["items"]:
+        variant = ProductVariant.objects.filter(
+            business=request.user.active_membership.business,
+            pk=item["variant_id"],
+            is_active=True,
+            product__is_active=True,
+        ).first()
+        if variant is None:
+            return Response({"detail": "Variant was not found in the active business."}, status=status.HTTP_400_BAD_REQUEST)
+        line_items.append({"variant": variant, "quantity": item["quantity"], "unit_price": item["unit_price"]})
+
+    try:
+        sale, created = checkout_sale(
+            business=request.user.active_membership.business,
+            actor=request.user,
+            location_id=serializer.validated_data["location_id"],
+            items=line_items,
+            payment_method=serializer.validated_data["payment_method"],
+            amount_paid=serializer.validated_data["amount_paid"],
+            idempotency_key=serializer.validated_data.get("idempotency_key"),
+        )
+    except ValidationError as exc:
+        return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+    return Response(SaleSerializer(sale, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, PosCheckoutPermission])
+def sales_refund(request, sale_id):
+    serializer = SaleRefundSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        sale = refund_sale(
+            business=request.user.active_membership.business,
+            actor=request.user,
+            sale_id=sale_id,
+            amount=serializer.validated_data["amount"],
+            reason=serializer.validated_data["reason"],
+            idempotency_key=serializer.validated_data.get("idempotency_key"),
+        )
+    except Sale.DoesNotExist:
+        return Response({"detail": "Sale was not found."}, status=status.HTTP_404_NOT_FOUND)
+    except ValidationError as exc:
+        return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+    return Response(SaleSerializer(sale, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+def purchasing_suppliers(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = SupplierSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        supplier = serializer.save()
+        return Response(SupplierSerializer(supplier).data, status=status.HTTP_201_CREATED)
+    suppliers = Supplier.objects.filter(business=business, is_active=True)
+    return Response({"results": SupplierSerializer(suppliers, many=True).data})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+@transaction.atomic
+def purchasing_orders(request):
+    business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = PurchaseOrderSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+        order = PurchaseOrder.objects.filter(business=business, pk=order.pk).select_related(
+            "supplier", "location"
+        ).prefetch_related("lines__variant").get()
+        response_status = status.HTTP_200_OK if serializer.replayed else status.HTTP_201_CREATED
+        return Response(PurchaseOrderSerializer(order, context={"request": request}).data, status=response_status)
+    orders = PurchaseOrder.objects.filter(business=business).select_related(
+        "supplier", "location"
+    ).prefetch_related("lines__variant")
+    requested_status = request.query_params.get("status")
+    if requested_status in dict(PurchaseOrder.STATUS_CHOICES):
+        orders = orders.filter(status=requested_status)
+    return Response({"results": PurchaseOrderSerializer(orders, many=True, context={"request": request}).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+def purchasing_order_detail(request, order_id):
+    order = PurchaseOrder.objects.filter(
+        business=request.user.active_membership.business,
+        pk=order_id,
+    ).select_related("supplier", "location").prefetch_related("lines__variant").first()
+    if order is None:
+        return Response({"detail": "Purchase order was not found."}, status=status.HTTP_404_NOT_FOUND)
+    return Response(PurchaseOrderSerializer(order, context={"request": request}).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+def purchasing_order_place(request, order_id):
+    try:
+        order = place_purchase_order(business=request.user.active_membership.business, order_id=order_id)
+    except PurchaseOrder.DoesNotExist:
+        return Response({"detail": "Purchase order was not found."}, status=status.HTTP_404_NOT_FOUND)
+    order = PurchaseOrder.objects.select_related("supplier", "location").prefetch_related("lines__variant").get(pk=order.pk)
+    return Response(PurchaseOrderSerializer(order, context={"request": request}).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+def purchasing_order_cancel(request, order_id):
+    serializer = PurchaseOrderCancelSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        order = cancel_purchase_order(
+            business=request.user.active_membership.business,
+            order_id=order_id,
+            reason=serializer.validated_data["reason"],
+        )
+    except PurchaseOrder.DoesNotExist:
+        return Response({"detail": "Purchase order was not found."}, status=status.HTTP_404_NOT_FOUND)
+    order = PurchaseOrder.objects.select_related("supplier", "location").prefetch_related("lines__variant").get(pk=order.pk)
+    return Response(PurchaseOrderSerializer(order, context={"request": request}).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, PurchasingEndpointPermission])
+def purchasing_order_receive(request, order_id):
+    serializer = PurchaseOrderReceiveSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        order, line, movement, created = receive_purchase_order_line(
+            business=request.user.active_membership.business,
+            actor=request.user,
+            order_id=order_id,
+            data=serializer.validated_data,
+        )
+    except PurchaseOrder.DoesNotExist:
+        return Response({"detail": "Purchase order was not found."}, status=status.HTTP_404_NOT_FOUND)
+    return Response({
+        "order_id": order.pk,
+        "order_number": order.order_number,
+        "status": order.status,
+        "line_id": line.pk,
+        "quantity_received": line.quantity_received,
+        "movement_id": movement.pk,
+        "replayed": not created,
+    }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 @api_view(["POST"])
