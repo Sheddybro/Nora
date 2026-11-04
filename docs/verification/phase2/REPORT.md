@@ -78,6 +78,15 @@ All captures were generated with local headless Edge at the specified CSS viewpo
 - Accepted Phase 1 `image-size` high-severity Metro tooling advisory remains unresolved; use trusted local assets and plan a compatible Metro upgrade. It is not shipped in the Android app bundle.
 - Git root is `C:/Users/DELL`, above the NorrisBeauty folder, and contains unrelated worktree changes. Project files appear untracked in that parent repository. Do not stage or commit from the parent root without first isolating/reviewing repository state.
 
-## Next recommended action
+## Historical next recommended action (2026-10-29)
 
-Scan the currently running LAN QR/link in Expo Go and verify the native Owner and Staff preview flows, tab navigation, POS basket, and narrow-screen layout. Then record the device result/screenshots. Do not begin business workflow implementation until this Phase 2 report is reviewed; no Phase 3 business logic is included here.
+At the time of this report, the next action was to scan the LAN QR/link in Expo Go and verify the native Owner and Staff preview flows, tab navigation, POS basket, and narrow-screen layout. This is historical Phase 2 guidance; later phase work is tracked in its own verification reports.
+
+## Phase 2 refinement pass (2026-11-04)
+
+- Scope: a premium polish pass for the shared workspace shell without changing the functional demo state or server-side workflow logic.
+- Files touched: `static/css/phase2.css`.
+- Improvements made: warmer gradient surfaces, higher-contrast luxury accent treatment for navigation and primary actions, more visible hover depth on cards and surfaces, and a slightly stronger glass-like header treatment while preserving the same accessibility and dark-mode structure.
+- Screenshot: [Owner dashboard, desktop](phase2-refinement-owner-dashboard.png).
+- Verification: `python manage.py test` passed; 51 tests, 0 failures.
+- Result: the existing Phase 2 design system remains intact while the workspace feels more premium and intentional without introducing any backend-only assumptions or production claims.

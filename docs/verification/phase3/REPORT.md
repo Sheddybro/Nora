@@ -33,3 +33,9 @@ This pass focused on the shared backend auth and role enforcement work that keep
 ## Acceptance
 
 Current acceptance is: ACCEPTED WITH DOCUMENTED LIMITATIONS.
+
+## Revalidation (2026-11-04)
+
+- `python manage.py test core.tests.FoundationTests` — PASS; 14 tests, 0 failures. Covers login success/failure, dashboard authentication, owner/staff web access, Django Admin separation, API login, and staff default permissions.
+- `python manage.py test` — PASS; 51 tests, 0 failures, re-run after the Phase 2 refinement.
+- Phase 3 identity and role enforcement remains implemented. Physical Android sign-in verification is still pending; no device-level result is claimed.
