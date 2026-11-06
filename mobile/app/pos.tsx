@@ -124,7 +124,7 @@ export default function PosScreen() {
     }
   };
 
-  return <NativeWorkspaceScreen eyebrow="LIVE CHECKOUT" title="Point of sale" description="Build a basket from available stock and record the sale through the business API." liveData>
+  return <NativeWorkspaceScreen eyebrow="LIVE CHECKOUT" title="Point of sale" description="Build a basket from available stock and record the sale through the business API.">
     {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
     <MobilePanel eyebrow="CHECKOUT LOCATION" title="Select stock location">
       <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7 }}>

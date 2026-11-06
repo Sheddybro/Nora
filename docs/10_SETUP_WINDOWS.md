@@ -1,7 +1,7 @@
 # Windows PowerShell setup
 
 ```powershell
-cd NorrisBeauty_Complete_Copilot_Starter
+cd C:\Users\DELL\Desktop\Developments\NorrisBeauty
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -14,7 +14,7 @@ python manage.py check
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/login/ and sign in with your superuser. Dashboard metrics intentionally show dashes until the real business modules are built. To attach a business/role, use Django admin to create a Business and Membership.
+Open http://127.0.0.1:8000/login/ and sign in with an account that has a Business Membership. Use Django admin only for local setup of users, businesses, and memberships.
 
 In a second terminal:
 ```powershell
@@ -40,4 +40,4 @@ python manage.py runserver 0.0.0.0:8000
 ```
 If Windows Firewall prompts, allow Python on the private network. Set `EXPO_PUBLIC_API_URL` in `mobile/.env` to `http://192.168.20.253:8000/api/v1` (again, replace the sample IP) before restarting Expo. From the phone browser, `http://<computer-wifi-ip>:8000/api/v1/health/` should return the health JSON.
 
-The mobile app currently remains a UI starter: it is not authenticated, has no API client, and does not make a request to `EXPO_PUBLIC_API_URL`. The phone URL instructions establish network reachability only; do not treat them as mobile API integration verification.
+The mobile app uses the shared API for authentication and implemented catalog, inventory, POS, customer, purchasing, and foreground stock-queue flows. Physical-device verification is still required; Expo Web or an Android bundle is not evidence of device acceptance.

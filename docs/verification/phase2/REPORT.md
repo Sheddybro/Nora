@@ -90,3 +90,18 @@ At the time of this report, the next action was to scan the LAN QR/link in Expo 
 - Screenshot: [Owner dashboard, desktop](phase2-refinement-owner-dashboard.png).
 - Verification: `python manage.py test` passed; 51 tests, 0 failures.
 - Result: the existing Phase 2 design system remains intact while the workspace feels more premium and intentional without introducing any backend-only assumptions or production claims.
+
+## Phase 2 accessibility refinement pass (2026-11-05)
+
+- Added a keyboard-visible skip link to the shared template and a focusable main-content landmark for workspace pages.
+- Added a real password-recovery link to the login screen, backed by the existing Django password reset route.
+- Marked login authentication errors as alerts and added regression coverage for recovery and the skip-link landmark.
+- Updated the stale catalog/inventory page test to assert the current API-backed loading shell while retaining direct API record verification.
+- Verification: `manage.py check`, `manage.py makemigrations --check --dry-run`, focused foundation tests (16), and the complete Django suite (60) passed with zero failures.
+- Browser verification: local login page opened successfully; accessibility snapshot exposed the skip link, username/password fields, password recovery link, and sign-in control. A fresh login screenshot was captured in the session; repository reference captures remain `login-1440.png` and `login-390.png`.
+
+## Official branding integration (2026-11-05)
+
+- The mandated `images/` folder was not present. The existing official asset was identified and inspected at `static/img/logo.jpeg`; it contains the gold/black crowned Norris Beautyquest mark.
+- The original JPEG was reused unchanged in Django login/password recovery/workspace navigation and copied unchanged to `mobile/assets/norris-logo.jpeg` for Expo login, workspace screens, app icon, and splash configuration.
+- The JPEG has a white background, so transparent-logo behavior is not claimed.

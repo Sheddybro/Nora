@@ -2,7 +2,11 @@ Django>=5.2,<5.3
 Pillow>=11.0,<13
 djangorestframework>=3.16,<4
 django-environ>=0.12,<1
+gunicorn>=22.0,<24
+whitenoise[brotli]>=6.8,<7
 psycopg[binary]>=3.2,<4
 pytest>=8,<10
 pytest-django>=4.10,<5
 ruff>=0.12,<1
+
+drmk1234

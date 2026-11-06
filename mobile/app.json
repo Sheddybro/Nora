@@ -8,6 +8,12 @@
       "expo-secure-store"
     ],
     "orientation": "default",
+    "icon": "./assets/norris-logo.jpeg",
+    "splash": {
+      "image": "./assets/norris-logo.jpeg",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF7F2"
+    },
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true

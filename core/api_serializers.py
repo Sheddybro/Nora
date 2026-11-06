@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.db.models.functions import Lower
 from uuid import uuid4
 
-from .models import Adjustment, AuditEvent, Batch, Business, Category, Customer, Expense, InventoryAlert, Notification, Product, ProductImage, ProductVariant, PurchaseOrder, PurchaseOrderLine, Sale, SaleLine, StockLocation, StockMovement, StockTake, StockTakeLine, Supplier, Transfer
+from .models import Adjustment, AuditEvent, Batch, Business, Category, Customer, Expense, InventoryAlert, Membership, Notification, Product, ProductImage, ProductVariant, PurchaseOrder, PurchaseOrderLine, Sale, SaleLine, StockLocation, StockMovement, StockTake, StockTakeLine, Supplier, Transfer
 from .permissions import membership_for_user
 from .upload_validators import validate_product_image
 
@@ -69,6 +69,9 @@ class ProductSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         membership = getattr(request.user, "active_membership", None) if request else None
         self.fields["category"].queryset = Category.objects.filter(business=membership.business) if membership else Category.objects.none()
+        if self.instance is None:
+            self.fields["category"].required = True
+            self.fields["category"].allow_null = False
 
     @transaction.atomic
     def create(self, validated_data):
@@ -173,9 +176,15 @@ class StockLocationSerializer(serializers.ModelSerializer):
         read_only_fields = ("id",)
 
     def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Location name is required.")
         request = self.context.get("request")
         membership = getattr(request.user, "active_membership", None) if request else None
-        if membership and StockLocation.objects.filter(business=membership.business, name__iexact=value).exists():
+        duplicate = StockLocation.objects.filter(business=membership.business, name__iexact=value) if membership else StockLocation.objects.none()
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
             raise serializers.ValidationError("A stock location with this name already exists.")
         return value
 
@@ -376,6 +385,8 @@ class SaleLineSerializer(serializers.ModelSerializer):
 
 class SaleSerializer(serializers.ModelSerializer):
     lines = SaleLineSerializer(many=True, read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True, allow_null=True)
+    location_name = serializers.CharField(source="location.name", read_only=True)
 
     class Meta:
         model = Sale
@@ -384,7 +395,9 @@ class SaleSerializer(serializers.ModelSerializer):
             "invoice_number",
             "status",
             "location_id",
+            "location_name",
             "customer_id",
+            "customer_name",
             "subtotal",
             "discount_amount",
             "tax_amount",
@@ -430,8 +443,20 @@ class SaleRefundSerializer(serializers.Serializer):
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
-        fields = ("id", "name", "email", "phone", "created_at")
-        read_only_fields = fields
+        fields = ("id", "name", "email", "phone", "notes", "created_at")
+        read_only_fields = ("id", "created_at")
+
+    def validate_name(self, value):
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Customer name is required.")
+        return cleaned
+
+    def validate_email(self, value):
+        return (value or "").strip()
+
+    def validate_phone(self, value):
+        return (value or "").strip()
 
 
 class TransferSerializer(serializers.ModelSerializer):
@@ -585,3 +610,39 @@ class UserSummarySerializer(serializers.ModelSerializer):
 
     def get_display_name(self, user):
         return user.get_full_name() or user.get_username()
+
+
+class BusinessProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Business
+        fields = ("id", "name")
+        read_only_fields = ("id",)
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Business name is required.")
+        return value
+
+
+class StaffMemberSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Membership
+        fields = ("id", "username", "display_name", "role")
+        read_only_fields = fields
+
+    def get_display_name(self, membership):
+        return membership.user.get_full_name() or membership.user.get_username()
+
+
+class AddStaffMemberSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, trim_whitespace=True)
+
+    def validate_username(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter an existing user's username.")
+        return value

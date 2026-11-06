@@ -6,8 +6,15 @@ from decimal import Decimal
 from io import BytesIO
 from PIL import Image
 import tempfile
+from pathlib import Path
+from config import settings as settings_module
 from .models import Adjustment, AuditEvent, Batch, Business, Category, Customer, Expense, InventoryAlert, Membership, Notification, Payment, Product, ProductImage, ProductVariant, PurchaseOrder, PurchaseOrderLine, Sale, SaleLine, StockLocation, StockMovement, StockTake, Supplier, Transfer
 class FoundationTests(TestCase):
+ def test_test_run_detection_handles_pytest_commands(self):
+    self.assertTrue(settings_module.is_test_run(['pytest','-q']))
+    self.assertTrue(settings_module.is_test_run(['python','-m','pytest']))
+    self.assertTrue(settings_module.is_test_run(['manage.py','test']))
+    self.assertFalse(settings_module.is_test_run(['runserver','0.0.0.0:8000']))
  def test_login_accepts_valid_credentials(self):
     user=get_user_model().objects.create_user(username='login-user',password='secure-pass-123')
     response=self.client.post('/login/',{'username':user.username,'password':'secure-pass-123'})
@@ -16,6 +23,12 @@ class FoundationTests(TestCase):
     response=self.client.post('/login/',{'username':'unknown','password':'incorrect'})
     self.assertEqual(response.status_code,200)
     self.assertContains(response,'Please check your username and password.')
+ def test_login_exposes_password_recovery(self):
+    response=self.client.get('/login/')
+    self.assertContains(response,'Forgot your password?')
+    self.assertContains(response,'/password-reset/')
+    self.assertContains(response,'static/img/logo.jpeg')
+    self.assertContains(response,'Norris Beautyquest')
  def test_health(self):
   r=self.client.get('/health/');self.assertEqual(r.status_code,200);self.assertEqual(r.json()['status'],'ok')
  def test_api_health(self):
@@ -30,6 +43,9 @@ class FoundationTests(TestCase):
   response=self.client.get('/')
   self.assertEqual(response.status_code,200)
   self.assertContains(response,'OWNER DASHBOARD')
+  self.assertContains(response,'Skip to main content')
+  self.assertContains(response,'id="main-content"')
+  self.assertContains(response,'static/img/logo.jpeg')
  def test_staff_dashboard(self):
   user=get_user_model().objects.create_user(username='staff',password='secure-pass-123')
   business=Business.objects.create(name='NorrisBeauty')
@@ -72,7 +88,7 @@ class FoundationTests(TestCase):
     self.assertNotContains(dashboard,'href="/staff/"')
     self.assertNotContains(dashboard,'href="/settings/"')
 
- def test_phase_two_workspace_screens_render_demo_states(self):
+ def test_phase_two_workspace_screens_render_live_states_without_demo_content(self):
       user=get_user_model().objects.create_user(username='phase2-screen-owner',password='secure-pass-123')
       business=Business.objects.create(name='NorrisBeauty Screen Previews')
       Membership.objects.create(user=user,business=business,role=Membership.OWNER)
@@ -93,14 +109,25 @@ class FoundationTests(TestCase):
          response=self.client.get(path)
          self.assertEqual(response.status_code,200)
          self.assertContains(response,title)
-         if path in ('/products/','/inventory/'):
-          self.assertNotContains(response,'DEMO DATA')
-          self.assertContains(response,'Live data')
-         else:
-          self.assertContains(response,'DEMO DATA')
+         self.assertNotContains(response,'DEMO DATA')
+         self.assertNotContains(response,'Demo fixture')
+         self.assertNotContains(response,'Radiance Serum')
+         self.assertNotContains(response,'Ada Nwosu')
          if path == '/pos/':
           self.assertContains(response,'Your basket is empty')
-          self.assertContains(response,'No sale, payment or stock update will be posted.')
+          self.assertContains(response,'Complete sale')
+
+ def test_products_category_form_initializer_is_available_to_page_setup(self):
+    source = (Path(settings_module.BASE_DIR) / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+    api_end = source.index('\n  const initCategoryForm')
+    self.assertGreater(api_end, source.index('    return payload;\n  };'))
+    self.assertEqual(source.count('const initCategoryForm'), 1)
+    self.assertIn("method: categoryId ? 'PATCH' : 'POST'", source)
+
+ def test_pos_normalizes_inventory_response_before_stock_lookup(self):
+    source = (Path(settings_module.BASE_DIR) / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+    self.assertIn("const [catalog, locations, stockResponse]", source)
+    self.assertIn("const stock = stockResponse.results;", source)
 
  def test_api_login_returns_active_membership_tokens(self):
     user=get_user_model().objects.create_user(username='api-owner',password='secure-pass-123')
@@ -260,26 +287,81 @@ class PhaseFourApiTests(TestCase):
     self.assertFalse(Category.objects.get(pk=self.category.pk).is_active)
 
  def test_staff_cannot_edit_or_deactivate_catalog_records(self):
+    self.client.force_login(self.owner)
+    self.client.delete(f'/api/v1/catalog/products/{self.product.pk}/')
     self.client.force_login(self.staff)
     edited=self.client.patch(f'/api/v1/catalog/products/{self.product.pk}/',{'name':'Unauthorized'},content_type='application/json')
     deactivated=self.client.delete(f'/api/v1/catalog/categories/{self.category.pk}/')
     self.assertEqual(edited.status_code,403)
     self.assertEqual(deactivated.status_code,403)
+    self.assertEqual(self.client.get(f'/api/v1/catalog/products/{self.product.pk}/').status_code,404)
 
  def test_duplicate_sku_and_category_return_validation_errors(self):
     self.authenticate(self.owner)
     product=self.client.post('/api/v1/catalog/products/',{
-     'name':'Duplicate SKU product','variants':[{'name':'Standard','sku':'NB-SK-104','price':'50.00'}],
+     'name':'Duplicate SKU product','category':self.category.pk,'variants':[{'name':'Standard','sku':'NB-SK-104','price':'50.00'}],
     },content_type='application/json')
     category=self.client.post('/api/v1/catalog/categories/',{'name':'skincare'},content_type='application/json')
     self.assertEqual(product.status_code,400)
     self.assertEqual(category.status_code,400)
 
+ def test_owner_manages_locations_and_staff_only_reads_active_locations(self):
+    self.authenticate(self.owner)
+    created=self.client.post('/api/v1/inventory/locations/',{'name':'Back room'},content_type='application/json')
+    self.assertEqual(created.status_code,201,created.content)
+    location_id=created.json()['id']
+    edited=self.client.patch(f'/api/v1/inventory/locations/{location_id}/',{'name':'Front room'},content_type='application/json')
+    self.assertEqual(edited.status_code,200,edited.content)
+    deactivated=self.client.delete(f'/api/v1/inventory/locations/{location_id}/')
+    self.assertEqual(deactivated.status_code,200,deactivated.content)
+    self.assertFalse(StockLocation.objects.get(pk=location_id).is_active)
+    self.authenticate(self.staff)
+    visible=self.client.get('/api/v1/inventory/locations/')
+    self.assertEqual(visible.status_code,200)
+    self.assertNotIn(location_id,[item['id'] for item in visible.json()['results']])
+    self.assertEqual(self.client.patch(f'/api/v1/inventory/locations/{self.location.pk}/',{'name':'Nope'},content_type='application/json').status_code,403)
+
+ def test_location_names_are_required_unique_and_business_scoped(self):
+    self.authenticate(self.owner)
+    blank=self.client.post('/api/v1/inventory/locations/',{'name':'   '},content_type='application/json')
+    duplicate=self.client.post('/api/v1/inventory/locations/',{'name':self.location.name.lower()},content_type='application/json')
+    self.assertEqual(blank.status_code,400)
+    self.assertEqual(duplicate.status_code,400)
+    other_business=Business.objects.create(name='Other Location Business')
+    other_location=StockLocation.objects.create(business=other_business,name='Other location')
+    self.assertEqual(self.client.patch(f'/api/v1/inventory/locations/{other_location.pk}/',{'name':'Changed'},content_type='application/json').status_code,404)
+
+ def test_category_listing_creation_and_product_category_scope(self):
+    self.authenticate(self.owner)
+    listed=self.client.get('/api/v1/catalog/categories/')
+    self.assertEqual(listed.status_code,200)
+    self.assertIn(self.category.name,[item['name'] for item in listed.json()['results']])
+    missing_category=self.client.post('/api/v1/catalog/products/',{
+      'name':'Missing category product',
+      'variants':[{'name':'Standard','sku':'CAT-SKU-MISSING','price':'50.00'}],
+    },content_type='application/json')
+    self.assertEqual(missing_category.status_code,400)
+    created=self.client.post('/api/v1/catalog/categories/',{'name':'Serums'},content_type='application/json')
+    self.assertEqual(created.status_code,201,created.content)
+    product=self.client.post('/api/v1/catalog/products/',{
+     'name':'Categorized product','category':created.json()['id'],
+     'variants':[{'name':'Standard','sku':'CAT-SKU-1','price':'50.00'}],
+    },content_type='application/json')
+    self.assertEqual(product.status_code,201,product.content)
+    self.assertEqual(product.json()['category'],created.json()['id'])
+    other_business=Business.objects.create(name='Other Category Business')
+    other_category=Category.objects.create(business=other_business,name='Other')
+    unauthorized=self.client.post('/api/v1/catalog/products/',{
+     'name':'Cross business product','category':other_category.pk,
+     'variants':[{'name':'Standard','sku':'CAT-SKU-2','price':'50.00'}],
+    },content_type='application/json')
+    self.assertEqual(unauthorized.status_code,400)
+
  def test_duplicate_barcode_is_rejected_case_insensitively(self):
     self.authenticate(self.owner)
     self.variant.barcode='NB-CODE-1';self.variant.save(update_fields=['barcode'])
     response=self.client.post('/api/v1/catalog/products/',{
-     'name':'Duplicate barcode product','variants':[{'name':'Standard','sku':'NEW-SKU','barcode':'nb-code-1','price':'50.00'}],
+     'name':'Duplicate barcode product','category':self.category.pk,'variants':[{'name':'Standard','sku':'NEW-SKU','barcode':'nb-code-1','price':'50.00'}],
     },content_type='application/json')
     self.assertEqual(response.status_code,400)
 
@@ -368,12 +450,12 @@ class PhaseFourWebTests(TestCase):
     inventory=self.client.get('/inventory/')
     api_catalog=self.client.get('/api/v1/catalog/products/')
     self.assertEqual(catalog.status_code,200)
-    self.assertContains(catalog,'Silk Repair Mask')
-    self.assertContains(catalog,'NB-HC-087')
+    self.assertContains(catalog,'Live records will appear here when available.')
+    self.assertContains(catalog,'data-table-body')
     self.assertNotContains(catalog,'DEMO DATA')
     self.assertEqual(inventory.status_code,200)
-    self.assertContains(inventory,'Out of stock')
-    self.assertContains(inventory,'₦0.00')
+    self.assertContains(inventory,'Loading stock ledger…')
+    self.assertContains(inventory,'data-inventory-ledger')
     self.assertNotContains(inventory,'DEMO DATA')
     self.assertEqual(api_catalog.status_code,200)
     self.assertEqual(api_catalog.json()['results'][0]['name'],'Silk Repair Mask')
@@ -386,7 +468,8 @@ class PhaseFourWebTests(TestCase):
     client.force_login(user)
     page=client.get('/products/')
     token=page.cookies['csrftoken'].value
-    payload={'name':'CSRF Product','variants':[{'name':'Standard','sku':'CSRF-001','price':'50.00'}]}
+    category=Category.objects.create(business=business,name='CSRF category')
+    payload={'name':'CSRF Product','category':category.pk,'variants':[{'name':'Standard','sku':'CSRF-001','price':'50.00'}]}
     rejected=client.post('/api/v1/catalog/products/',payload,content_type='application/json')
     self.assertEqual(rejected.status_code,403)
     accepted=client.post('/api/v1/catalog/products/',payload,content_type='application/json',HTTP_X_CSRFTOKEN=token)
@@ -1005,6 +1088,26 @@ class PhaseNineMobileCompletionApiTests(TestCase):
         self.assertEqual(payload['results'][0]['name'], 'Luminous Serum')
         self.assertEqual(payload['results'][0]['variants'][0]['barcode'], 'NB-SCAN-001')
 
+    def test_customer_creation_is_business_scoped_and_rejects_duplicates(self):
+        self.authenticate()
+        create_response = self.client.post(
+            '/api/v1/customers/',
+            {'name': 'New Business Customer', 'email': 'new@example.com', 'phone': '08030000000', 'notes': 'VIP guest'},
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        payload = create_response.json()
+        self.assertEqual(payload['name'], 'New Business Customer')
+        self.assertEqual(payload['phone'], '08030000000')
+
+        duplicate_response = self.client.post(
+            '/api/v1/customers/',
+            {'name': 'New Business Customer', 'phone': '08039999999'},
+            content_type='application/json',
+        )
+        self.assertEqual(duplicate_response.status_code, 400)
+        self.assertIn('already exists', duplicate_response.json()['detail'])
+
     def test_mobile_customer_list_is_authenticated_and_business_scoped(self):
         Customer.objects.create(business=self.business, name='Current Business Customer', phone='08030000000')
         other_business = Business.objects.create(name='Other Phase Nine Business')
@@ -1019,3 +1122,202 @@ class PhaseNineMobileCompletionApiTests(TestCase):
         self.assertEqual(response.json()['count'], 1)
         self.assertEqual(response.json()['results'][0]['name'], 'Current Business Customer')
         self.assertEqual(self.client.get('/api/v1/customers/').json()['results'][0]['phone'], '08030000000')
+
+
+class PhaseTenWorkspaceApiTests(TestCase):
+    def setUp(self):
+        self.business = Business.objects.create(name='Phase Ten Workspace')
+        self.owner = get_user_model().objects.create_user(username='workspace-owner', password='secure-pass-123')
+        self.staff = get_user_model().objects.create_user(username='workspace-staff', password='secure-pass-123')
+        Membership.objects.create(user=self.owner, business=self.business, role=Membership.OWNER)
+        Membership.objects.create(user=self.staff, business=self.business, role=Membership.STAFF)
+        self.client = Client()
+
+    def authenticate(self, user):
+        response = self.client.post(
+            '/api/v1/auth/login/',
+            {'username': user.username, 'password': 'secure-pass-123'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f"Bearer {response.json()['access']}"
+
+    def test_owner_can_add_existing_user_as_staff_only(self):
+        new_user = get_user_model().objects.create_user(username='new-team-member', password='secure-pass-123')
+        self.authenticate(self.owner)
+
+        self.assertEqual(self.client.get('/api/v1/staff/members/').json()['count'], 2)
+        created = self.client.post(
+            '/api/v1/staff/members/',
+            {'username': new_user.username},
+            content_type='application/json',
+        )
+        self.assertEqual(created.status_code, 201, created.content)
+        self.assertEqual(created.json()['role'], Membership.STAFF)
+
+        duplicate = self.client.post(
+            '/api/v1/staff/members/',
+            {'username': new_user.username},
+            content_type='application/json',
+        )
+        self.assertEqual(duplicate.status_code, 409)
+
+    def test_staff_cannot_manage_members_and_unknown_user_is_not_linked(self):
+        self.authenticate(self.staff)
+        self.assertEqual(self.client.get('/api/v1/staff/members/').status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                '/api/v1/staff/members/',
+                {'username': 'not-registered'},
+                content_type='application/json',
+            ).status_code,
+            403,
+        )
+
+        self.authenticate(self.owner)
+        missing = self.client.post(
+            '/api/v1/staff/members/',
+            {'username': 'not-registered'},
+            content_type='application/json',
+        )
+        self.assertEqual(missing.status_code, 404)
+
+    def test_business_name_update_is_validated_and_audited(self):
+        self.authenticate(self.owner)
+        updated = self.client.patch(
+            '/api/v1/business/profile/',
+            {'name': '  Updated Workspace  '},
+            content_type='application/json',
+        )
+        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertEqual(updated.json()['name'], 'Updated Workspace')
+        self.assertTrue(AuditEvent.objects.filter(
+            business=self.business,
+            event='business.profile_updated',
+            actor=self.owner,
+        ).exists())
+
+        invalid = self.client.patch(
+            '/api/v1/business/profile/',
+            {'name': '   '},
+            content_type='application/json',
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_staff_cannot_update_business_name(self):
+        self.authenticate(self.staff)
+        response = self.client.patch(
+            '/api/v1/business/profile/',
+            {'name': 'Not Allowed'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+        self.business.refresh_from_db()
+        self.assertEqual(self.business.name, 'Phase Ten Workspace')
+
+    def test_calendar_report_uses_business_data_and_preserves_legacy_summary(self):
+        from calendar import monthrange
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        product = Product.objects.create(business=self.business, name='Live report product')
+        variant = ProductVariant.objects.create(
+            business=self.business,
+            product=product,
+            sku='REPORT-SKU',
+            price='50.00',
+            unit_cost='15.00',
+            reorder_point=5,
+        )
+        location = StockLocation.objects.create(business=self.business, name='Report location')
+        supplier = Supplier.objects.create(business=self.business, name='Report supplier')
+        order = PurchaseOrder.objects.create(
+            business=self.business,
+            supplier=supplier,
+            location=location,
+            order_number='REPORT-PO',
+            created_by=self.owner,
+        )
+        order_line = PurchaseOrderLine.objects.create(
+            purchase_order=order,
+            variant=variant,
+            quantity_ordered=2,
+            quantity_received=2,
+            unit_cost='15.00',
+        )
+        batch = Batch.objects.create(
+            business=self.business,
+            variant=variant,
+            location=location,
+            batch_number='REPORT-BATCH',
+            quantity_on_hand=2,
+            unit_cost='15.00',
+        )
+        StockMovement.objects.create(
+            business=self.business,
+            variant=variant,
+            location=location,
+            batch=batch,
+            purchase_order_line=order_line,
+            actor=self.owner,
+            kind=StockMovement.RECEIPT,
+            quantity_delta=2,
+            unit_cost='15.00',
+            reason='Report fixture receipt',
+            idempotency_key='report-fixture-receipt',
+        )
+        sale = Sale.objects.create(
+            business=self.business,
+            location=location,
+            invoice_number='REPORT-SALE',
+            status=Sale.PAID,
+            total='100.00',
+            paid_amount='100.00',
+            created_by=self.owner,
+        )
+        SaleLine.objects.create(
+            sale=sale,
+            variant=variant,
+            quantity=2,
+            unit_price='50.00',
+            line_total='100.00',
+        )
+        Payment.objects.create(
+            sale=sale,
+            method=Payment.REFUND,
+            amount='10.00',
+            status='refunded',
+            idempotency_key='report-fixture-refund',
+        )
+        Expense.objects.create(
+            business=self.business,
+            title='Report fixture expense',
+            amount='5.00',
+            expense_date=today,
+            created_by=self.owner,
+        )
+
+        self.authenticate(self.owner)
+        response = self.client.get('/api/v1/reports/summary/?period=month')
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload['sales_total'], '90.00')
+        self.assertEqual(payload['order_count'], 1)
+        self.assertEqual(payload['average_order'], '90.00')
+        self.assertEqual(payload['units_sold'], 2)
+        self.assertEqual(payload['purchase_total'], '30.00')
+        self.assertEqual(payload['expense_total'], '5.00')
+        self.assertEqual(payload['net'], '55.00')
+        self.assertEqual(payload['low_stock'], 1)
+        self.assertEqual(payload['start_date'], today.replace(day=1).isoformat())
+        self.assertEqual(len(payload['chart']['values']), monthrange(today.year, today.month)[1])
+
+        legacy = self.client.get('/api/v1/reports/summary/')
+        self.assertEqual(legacy.status_code, 200)
+        self.assertEqual(legacy.json()['sales_total'], '100.00')
+        self.assertEqual(legacy.json()['purchase_total'], '30.00')
+
+    def test_report_period_is_validated(self):
+        self.authenticate(self.owner)
+        response = self.client.get('/api/v1/reports/summary/?period=quarter')
+        self.assertEqual(response.status_code, 400)

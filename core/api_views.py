@@ -4,7 +4,7 @@ from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction
-from django.db import models
+from django.db import IntegrityError, models
 from django.db.models import Sum
 from django.db.models import Q
 from django.core.paginator import Paginator
@@ -18,8 +18,8 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .api_serializers import AdjustmentSerializer, AuditEventSerializer, CategorySerializer, CheckoutSaleSerializer, CustomerSerializer, ExpenseSerializer, InventoryAlertSerializer, MembershipTokenObtainPairSerializer, NotificationSerializer, PasswordChangeInputSerializer, ProductImageSerializer, ProductSerializer, PurchaseOrderCancelSerializer, PurchaseOrderReceiveSerializer, PurchaseOrderSerializer, RefreshTokenInputSerializer, SaleRefundSerializer, SaleSerializer, StockLocationSerializer, StockMovementInputSerializer, StockTakeSerializer, SupplierSerializer, TransferSerializer, UserSummarySerializer
-from .finance_services import business_finance_summary, create_expense, record_audit_event, create_notification
+from .api_serializers import AddStaffMemberSerializer, AdjustmentSerializer, AuditEventSerializer, BusinessProfileSerializer, CategorySerializer, CheckoutSaleSerializer, CustomerSerializer, ExpenseSerializer, InventoryAlertSerializer, MembershipTokenObtainPairSerializer, NotificationSerializer, PasswordChangeInputSerializer, ProductImageSerializer, ProductSerializer, PurchaseOrderCancelSerializer, PurchaseOrderReceiveSerializer, PurchaseOrderSerializer, RefreshTokenInputSerializer, SaleRefundSerializer, SaleSerializer, StaffMemberSerializer, StockLocationSerializer, StockMovementInputSerializer, StockTakeSerializer, SupplierSerializer, TransferSerializer, UserSummarySerializer
+from .finance_services import business_finance_summary, business_period_summary, create_expense, record_audit_event, create_notification
 from .inventory_services import _active_inventory_alerts, record_stock_movement, record_stocktake, record_transfer
 from .models import Adjustment, AuditEvent, Batch, Category, Customer, Expense, InventoryAlert, Membership, Notification, Product, ProductImage, ProductVariant, PurchaseOrder, Sale, StockLocation, StockMovement, StockTake, Supplier, Transfer
 from .permissions import BusinessPermission, BusinessSettingsPermission, membership_has_permission, membership_permissions
@@ -43,6 +43,16 @@ class InventoryEndpointPermission(BusinessPermission):
         code = "inventory.adjust" if request.method == "POST" else "inventory.view"
         membership = getattr(request.user, "active_membership", None)
         return bool(request.user and request.user.is_authenticated and membership_has_permission(membership, code))
+
+
+class InventoryLocationPermission(BusinessPermission):
+    def has_permission(self, request, view):
+        membership = getattr(request.user, "active_membership", None)
+        if not request.user or not request.user.is_authenticated or membership is None:
+            return False
+        if request.method == "GET":
+            return membership_has_permission(membership, "inventory.view")
+        return membership.role == Membership.OWNER and membership_has_permission(membership, "inventory.adjust")
 
 
 class SalesListPermission(BusinessPermission):
@@ -71,6 +81,19 @@ class PurchasingEndpointPermission(BusinessPermission):
 
 class ReportsEndpointPermission(BusinessPermission):
     permission_code = "reports.view"
+
+
+class StaffManagementPermission(BusinessPermission):
+    permission_code = "staff.manage"
+
+    def has_permission(self, request, view):
+        membership = getattr(request.user, "active_membership", None)
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and membership
+            and membership.role == Membership.OWNER
+        )
 
 
 @api_view(["POST"])
@@ -144,11 +167,68 @@ def mobile_permissions(request):
     return Response({"role": membership.role, "business_id": membership.business_id, "permissions": permissions})
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated, BusinessSettingsPermission])
 def business_profile(request):
-    membership = request.user.active_membership
-    return Response({"id": membership.business_id, "name": membership.business.name})
+    business = request.user.active_membership.business
+    if request.method == "PATCH":
+        serializer = BusinessProfileSerializer(business, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        before = {"name": business.name}
+        with transaction.atomic():
+            business = serializer.save()
+            if before["name"] != business.name:
+                record_audit_event(
+                    business=business,
+                    actor=request.user,
+                    event="business.profile_updated",
+                    object_type="Business",
+                    object_id=business.pk,
+                    before_value=before,
+                    after_value={"name": business.name},
+                )
+    return Response(BusinessProfileSerializer(business).data)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, StaffManagementPermission])
+def staff_members(request):
+    business = request.user.active_membership.business
+    if request.method == "GET":
+        memberships = Membership.objects.filter(
+            business=business,
+            user__is_active=True,
+        ).select_related("user").order_by("role", "user__username", "id")
+        return Response({"count": memberships.count(), "results": StaffMemberSerializer(memberships, many=True).data})
+
+    serializer = AddStaffMemberSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = get_user_model().objects.filter(
+        username__iexact=serializer.validated_data["username"],
+        is_active=True,
+    ).first()
+    if user is None:
+        return Response({"detail": "No active user exists with that username."}, status=status.HTTP_404_NOT_FOUND)
+    if Membership.objects.filter(business=business, user=user).exists():
+        return Response({"detail": "This user is already a member of the business."}, status=status.HTTP_409_CONFLICT)
+    try:
+        with transaction.atomic():
+            membership = Membership.objects.create(
+                business=business,
+                user=user,
+                role=Membership.STAFF,
+            )
+            record_audit_event(
+                business=business,
+                actor=request.user,
+                event="staff.member_added",
+                object_type="Membership",
+                object_id=membership.pk,
+                details={"username": user.get_username(), "role": Membership.STAFF},
+            )
+    except IntegrityError:
+        return Response({"detail": "This user is already a member of the business."}, status=status.HTTP_409_CONFLICT)
+    return Response(StaffMemberSerializer(membership).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET", "POST"])
@@ -168,6 +248,14 @@ def expenses(request):
 @permission_classes([IsAuthenticated, ReportsEndpointPermission])
 def report_summary(request):
     business = request.user.active_membership.business
+    period = request.query_params.get("period")
+    if period:
+        if period not in {"week", "month", "year"}:
+            return Response({"detail": "Period must be week, month, or year."}, status=status.HTTP_400_BAD_REQUEST)
+        summary = business_period_summary(business=business, period=period)
+        for field in ("sales_total", "average_order", "purchase_total", "expense_total", "net"):
+            summary[field] = str(summary[field])
+        return Response(summary)
     summary = business_finance_summary(business)
     return Response({
         "sales_total": str(summary["sales_total"]),
@@ -235,7 +323,10 @@ def catalog_products(request):
 @permission_classes([IsAuthenticated, CatalogEndpointPermission])
 def catalog_product_detail(request, product_id):
     business = request.user.active_membership.business
-    product = Product.objects.filter(business=business, pk=product_id).select_related("category").prefetch_related("variants", "images").first()
+    product_query = Product.objects.filter(business=business, pk=product_id)
+    if request.user.active_membership.role != Membership.OWNER:
+        product_query = product_query.filter(is_active=True)
+    product = product_query.select_related("category").prefetch_related("variants", "images").first()
     if product is None:
         return Response({"detail": "Product was not found."}, status=status.HTTP_404_NOT_FOUND)
     if request.method == "DELETE":
@@ -355,7 +446,7 @@ def catalog_category_detail(request, category_id):
 
 
 @api_view(["GET", "POST"])
-@permission_classes([IsAuthenticated, InventoryEndpointPermission])
+@permission_classes([IsAuthenticated, InventoryLocationPermission])
 def inventory_locations(request):
     business = request.user.active_membership.business
     if request.method == "POST":
@@ -363,8 +454,27 @@ def inventory_locations(request):
         serializer.is_valid(raise_exception=True)
         location = serializer.save(business=business)
         return Response(StockLocationSerializer(location).data, status=status.HTTP_201_CREATED)
-    locations = StockLocation.objects.filter(business=business, is_active=True)
+    locations = StockLocation.objects.filter(business=business)
+    if request.user.active_membership.role != Membership.OWNER:
+        locations = locations.filter(is_active=True)
     return Response({"results": StockLocationSerializer(locations, many=True).data})
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated, InventoryLocationPermission])
+def inventory_location_detail(request, location_id):
+    membership = request.user.active_membership
+    location = StockLocation.objects.filter(business=membership.business, pk=location_id).first()
+    if location is None:
+        return Response({"detail": "Stock location was not found."}, status=status.HTTP_404_NOT_FOUND)
+    if request.method == "DELETE":
+        location.is_active = False
+        location.save(update_fields=["is_active"])
+        return Response(StockLocationSerializer(location).data)
+    serializer = StockLocationSerializer(location, data=request.data, partial=True, context={"request": request})
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
 
 
 @api_view(["GET"])
@@ -560,10 +670,19 @@ def sales_list(request):
     return Response({"results": SaleSerializer(sales, many=True, context={"request": request}).data})
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated, CustomersListPermission])
 def customers_list(request):
     business = request.user.active_membership.business
+    if request.method == "POST":
+        serializer = CustomerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            customer = Customer.objects.create(business=business, **serializer.validated_data)
+        except IntegrityError:
+            return Response({"detail": "A customer with this name already exists for this business."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(CustomerSerializer(customer).data, status=status.HTTP_201_CREATED)
+
     customers = Customer.objects.filter(business=business, is_active=True)
     query = request.query_params.get("search", "").strip()
     if query:

@@ -19,11 +19,11 @@ Implemented: business-scoped categories/products/variants; validated product-ima
 
 ## Phase 5 status
 
-Phase 5 is approved and in progress. Scope is limited to business-scoped suppliers, purchase orders, receiving, cancellation, and inventory reconciliation through the shared `/api/v1/` business logic. See `docs/verification/phase5/REPORT.md` for implementation and verification status.
+Phase 5 is complete for automated verification. The implementation covers business-scoped suppliers, purchase orders, receiving, cancellation, and inventory reconciliation through the shared `/api/v1/` business logic. Browser and device validation remain separate release checks. See `docs/verification/phase5/REPORT.md`.
 
 ## Phase 6 status
 
-Phase 6 is now in progress. Scope is limited to business-scoped sales checkout, invoice totals, stock deduction, and refund reversal through the shared `/api/v1/` POS workflow. See `docs/verification/phase6/REPORT.md` for implementation and verification status.
+Phase 6 is complete for automated verification. The implementation covers business-scoped sales checkout, invoice totals, stock deduction, and refund reversal through the shared `/api/v1/` POS workflow. Browser and device validation remain separate release checks. See `docs/verification/phase6/REPORT.md`.
 
 ## Phase 7 status
 
@@ -35,4 +35,4 @@ Phase 8 is complete for the approved scope. The implementation includes expense 
 
 ## Phase 9 status
 
-Phase 9 is in progress. The implementation includes exact barcode lookup, live Expo catalog/inventory screens, stock-aware online POS checkout with server-enforced idempotency, business-scoped customer listing, owner supplier/purchase-order creation and lifecycle actions with idempotent create/receive, and foreground replay of locally queued stock movements with visible conflicts. Customer creation, purchasing order editing/multi-line composition, background sync, barcode hardware integration, and physical-device/E2E screenshots remain pending. See `docs/verification/phase9/REPORT.md` for verification status and limitations.
+Phase 9 is implemented at code level but blocked for final acceptance. The implementation includes exact barcode lookup, live Expo catalog/inventory screens, stock-aware online POS checkout with server-enforced idempotency, business-scoped customer listing, owner supplier/purchase-order lifecycle actions, and foreground replay of locally queued stock movements. Physical-device/E2E verification, device screenshots, background sync, barcode hardware integration, and richer purchasing/customer UI remain pending. See `docs/verification/phase9/REPORT.md` and `docs/qa/execution/QA_FINAL_REPORT.md`.

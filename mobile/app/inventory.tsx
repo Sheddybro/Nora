@@ -101,10 +101,14 @@ export default function InventoryScreen() {
       const isLikelyOffline = status === undefined || status >= 500 || status === 429;
       if (isLikelyOffline) {
         if (!session) throw requestError;
-        await queueOfflineMutation({ userId: session.user.id, businessId: session.business.id, resource: '/inventory/movements/', method: 'POST', payload, idempotencyKey });
-        setPendingQueue(await getQueuedMutations(session.user.id, session.business.id));
-        setError('Offline queue saved. The movement will sync when connectivity returns.');
-        Alert.alert('Offline sync queued', 'The movement was stored locally and will be reconciled with the server when the device reconnects.');
+        try {
+          await queueOfflineMutation({ userId: session.user.id, businessId: session.business.id, resource: '/inventory/movements/', method: 'POST', payload, idempotencyKey });
+          setPendingQueue(await getQueuedMutations(session.user.id, session.business.id));
+          setError('Offline queue saved. The movement will sync when connectivity returns.');
+          Alert.alert('Offline sync queued', 'The movement was stored locally and will be reconciled with the server when the device reconnects.');
+        } catch (queueError) {
+          setError(`The movement could not be confirmed or saved offline. Check the stock ledger before retrying. ${(queueError as Error).message}`);
+        }
       } else {
         setError(message);
       }
@@ -112,7 +116,7 @@ export default function InventoryScreen() {
     finally { setIsSaving(false); }
   };
 
-  return <NativeWorkspaceScreen eyebrow="STOCK CONTROL" title="Inventory" description="Review current business stock by location." liveData>
+  return <NativeWorkspaceScreen eyebrow="STOCK CONTROL" title="Inventory" description="Review current business stock by location.">
     <MobilePanel eyebrow="LIVE SUMMARY" title="Stock at a glance">
       {[
         ['Units on hand', units.toLocaleString('en-NG')],

@@ -142,7 +142,7 @@ export default function PurchasingWorkspace() {
     }
   };
 
-  return <NativeWorkspaceScreen eyebrow="PROCUREMENT" title="Purchases & suppliers" description="Create supplier orders and reconcile receipts into inventory." liveData>
+  return <NativeWorkspaceScreen eyebrow="PROCUREMENT" title="Purchases & suppliers" description="Create supplier orders and reconcile receipts into inventory.">
     {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
     <MobilePanel eyebrow="SUPPLIERS" title={`${suppliers.length} active suppliers`}>
       {suppliers.map((supplier) => <MobileRow key={supplier.id} icon="⇄" title={supplier.name} detail={supplier.phone || supplier.email || 'No contact details'} action="" />)}

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export const mobileTheme = {
@@ -12,19 +12,19 @@ export function useMobileTheme() {
   return useColorScheme() === 'dark' ? mobileTheme.dark : mobileTheme.light;
 }
 
-type WorkspaceScreenProps = { eyebrow: string; title: string; description: string; children: ReactNode; liveData?: boolean };
+type WorkspaceScreenProps = { eyebrow: string; title: string; description: string; children: ReactNode };
 type WorkspaceRowProps = { icon: string; title: string; detail: string; action?: string; onPress?: () => void };
 type WorkspacePanelProps = { eyebrow?: string; title?: string; children: ReactNode };
 
-export function NativeWorkspaceScreen({ eyebrow, title, description, children, liveData = false }: WorkspaceScreenProps) {
+export function NativeWorkspaceScreen({ eyebrow, title, description, children }: WorkspaceScreenProps) {
   const theme = useMobileTheme();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Image source={require('../../assets/norris-logo.jpeg')} accessibilityLabel="Norris Beautyquest logo" resizeMode="contain" style={styles.logo} />
         <Text style={[styles.eyebrow, { color: theme.rose }]}>{eyebrow}</Text>
         <Text style={[styles.title, { color: theme.ink }]}>{title}</Text>
         <Text style={[styles.description, { color: theme.muted }]}>{description}</Text>
-        {liveData ? null : <View style={[styles.preview, { backgroundColor: theme.blush, borderColor: theme.line }]}><Text style={{ color: theme.rose }}>✦</Text><Text style={[styles.previewText, { color: theme.ink }]}>Preview only · sample data, no live business actions.</Text></View>}
         {children}
       </ScrollView>
     </SafeAreaView>
@@ -51,8 +51,7 @@ export const nativeStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 }, content: { padding: 18, paddingTop: 16, paddingBottom: 26, gap: 12 }, eyebrow: { fontSize: 9, fontWeight: '700', letterSpacing: 1.4 }, title: { marginTop: 0, fontFamily: 'serif', fontSize: 27, lineHeight: 34, fontWeight: '600' }, description: { marginTop: -7, fontSize: 11, lineHeight: 17 },
-  preview: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderWidth: 1, borderRadius: 8 }, previewText: { flex: 1, fontSize: 9, lineHeight: 14 },
+  safe: { flex: 1 }, content: { padding: 18, paddingTop: 12, paddingBottom: 26, gap: 12 }, logo: { width: 112, height: 54, borderRadius: 7, backgroundColor: '#FFFFFF' }, eyebrow: { fontSize: 9, fontWeight: '700', letterSpacing: 1.4 }, title: { marginTop: 0, fontFamily: 'serif', fontSize: 27, lineHeight: 34, fontWeight: '600' }, description: { marginTop: -7, fontSize: 11, lineHeight: 17 },
   panel: { padding: 14, borderWidth: 1, borderRadius: 9 }, panelTitle: { marginTop: 5, marginBottom: 8, fontSize: 14, fontWeight: '700' },
   row: { minHeight: 57, flexDirection: 'row', alignItems: 'center', gap: 9, borderBottomWidth: StyleSheet.hairlineWidth }, rowIcon: { width: 29, height: 29, borderRadius: 8, textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden', fontSize: 14 }, rowCopy: { flex: 1 }, rowTitle: { fontSize: 10, fontWeight: '600' }, rowDetail: { marginTop: 3, fontSize: 8 }, rowAction: { paddingHorizontal: 4, fontSize: 14 },
 });

@@ -21,6 +21,27 @@ let syncInProgress = false;
 let queueOperation: Promise<void> = Promise.resolve();
 const queueListeners = new Set<() => void>();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOfflineMutation(value: unknown): value is OfflineMutation {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.id === 'string'
+    && typeof value.createdAt === 'string'
+    && Number.isSafeInteger(value.userId)
+    && Number.isSafeInteger(value.businessId)
+    && typeof value.resource === 'string'
+    && ['POST', 'PATCH', 'DELETE'].includes(value.method as string)
+    && isRecord(value.payload)
+    && (value.idempotencyKey === undefined || typeof value.idempotencyKey === 'string')
+    && ['queued', 'syncing', 'conflict'].includes(value.status as string)
+    && (value.conflict === undefined || typeof value.conflict === 'string');
+}
+
 export function subscribeToQueue(listener: () => void): () => void {
   queueListeners.add(listener);
   return () => queueListeners.delete(listener);
@@ -32,18 +53,19 @@ async function readStoredQueue(): Promise<OfflineMutation[]> {
     return [];
   }
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as OfflineMutation[];
-    if (!Array.isArray(parsed)) {
-      await AsyncStorage.removeItem(QUEUE_KEY);
-      return [];
-    }
-
-    return parsed.map((item) => item.status === 'syncing' ? { ...item, status: 'queued' } : item);
-  } catch {
-    await AsyncStorage.removeItem(QUEUE_KEY);
-    return [];
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : '';
+    throw new Error(`Saved offline changes could not be read and have been left untouched.${detail}`);
   }
+
+  if (!Array.isArray(parsed) || !parsed.every(isOfflineMutation)) {
+    throw new Error('Saved offline changes have an invalid format and have been left untouched.');
+  }
+
+  return parsed.map((item) => item.status === 'syncing' ? { ...item, status: 'queued' } : item);
 }
 
 async function persistQueue(items: OfflineMutation[]): Promise<void> {
@@ -136,7 +158,11 @@ export async function syncQueuedMutations(session: AuthSession): Promise<void> {
       try {
         await apiRequest(mutation.resource, {
           method: mutation.method,
-          body: JSON.stringify(mutation.payload),
+          body: JSON.stringify(
+            mutation.idempotencyKey && !Object.prototype.hasOwnProperty.call(mutation.payload, 'idempotency_key')
+              ? { ...mutation.payload, idempotency_key: mutation.idempotencyKey }
+              : mutation.payload,
+          ),
         });
         await markMutationSynced(mutation.id);
       } catch (error) {

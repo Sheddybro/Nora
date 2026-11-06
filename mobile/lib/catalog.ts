@@ -22,6 +22,8 @@ export type Product = {
   images: { id: number; image_url: string; alt_text: string; position: number }[];
 };
 
+export type Category = { id: number; name: string; is_active: boolean };
+
 export type InventoryStock = {
   variant_id: number;
   product_name: string;
@@ -49,10 +51,15 @@ export type SaleReceipt = {
 export async function createProduct(payload: {
   name: string;
   description?: string;
-  category?: number | null;
+  category: number;
   variants: { name: string; sku: string; barcode?: string; price: string; unit_cost?: string | null; reorder_point: number }[];
 }): Promise<Product> {
   return apiRequest<Product>('/catalog/products/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function fetchCategories(): Promise<Category[]> {
+  const response = await apiRequest<{ results: Category[] }>('/catalog/categories/');
+  return response.results.filter((category) => category.is_active);
 }
 
 export async function uploadProductImage(productId: number, uri: string, fileName: string, mimeType: string, altText: string): Promise<void> {
@@ -65,7 +72,7 @@ export async function uploadProductImage(productId: number, uri: string, fileNam
 
 export async function fetchStockLocations(): Promise<StockLocation[]> {
   const response = await apiRequest<{ results: StockLocation[] }>('/inventory/locations/');
-  return response.results;
+  return response.results.filter((location) => location.is_active);
 }
 
 export async function createStockMovement(payload: {

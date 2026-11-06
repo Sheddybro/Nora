@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
-import { fetchProducts, createProduct, uploadProductImage, searchProductsByBarcode, type Product } from '../lib/catalog';
+import { fetchProducts, fetchCategories, createProduct, uploadProductImage, searchProductsByBarcode, type Category, type Product } from '../lib/catalog';
 import { useAuth } from './components/AuthContext';
 
 export default function CatalogScreen() {
   const theme = useMobileTheme();
   const { session } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -18,8 +20,13 @@ export default function CatalogScreen() {
   const [barcodeQuery, setBarcodeQuery] = useState('');
   const [barcodeMatch, setBarcodeMatch] = useState<Product | null>(null);
   const [photo, setPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [categoryId, setCategoryId] = useState(0);
 
-  const refresh = () => fetchProducts().then(setProducts).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
+  const refresh = () => Promise.all([fetchProducts(), fetchCategories()]).then(([nextProducts, nextCategories]) => {
+    setProducts(nextProducts);
+    setCategories(nextCategories);
+    setCategoryId((current) => current || nextCategories[0]?.id || 0);
+  }).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
   useEffect(() => { refresh(); }, []);
 
   const selectPhoto = async () => {
@@ -28,11 +35,11 @@ export default function CatalogScreen() {
   };
 
   const saveProduct = async () => {
-    if (!name.trim() || !sku.trim() || !price.trim()) return setError('Product name, SKU, and price are required.');
+    if (!name.trim() || !sku.trim() || !price.trim() || !categoryId) return setError('Product name, category, SKU, and price are required.');
     setIsSaving(true);
     setError('');
     try {
-      const product = await createProduct({ name: name.trim(), variants: [{ name: 'Standard', sku: sku.trim(), price: price.trim(), reorder_point: 0 }] });
+      const product = await createProduct({ name: name.trim(), category: categoryId, variants: [{ name: 'Standard', sku: sku.trim(), price: price.trim(), reorder_point: 0 }] });
       if (photo) await uploadProductImage(product.id, photo.uri, photo.fileName || 'product-image.jpg', photo.mimeType || 'image/jpeg', name.trim());
       setName(''); setSku(''); setPrice(''); setPhoto(null);
       await refresh();
@@ -61,7 +68,7 @@ export default function CatalogScreen() {
     }
   };
 
-  return <NativeWorkspaceScreen eyebrow="CATALOG" title="Products" description="Browse products and variants for your business." liveData>
+  return <NativeWorkspaceScreen eyebrow="CATALOG" title="Products" description="Browse products and variants for your business.">
     <MobilePanel eyebrow="BARCODE LOOKUP" title="Find product by code">
       <TextInput accessibilityLabel="Barcode lookup" placeholder="Scan or type the barcode" value={barcodeQuery} onChangeText={setBarcodeQuery} placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
       <Pressable accessibilityRole="button" onPress={lookupBarcode} style={[nativeStyles.button, { borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 11, fontWeight: '700' }}>Lookup barcode</Text></Pressable>
@@ -75,6 +82,10 @@ export default function CatalogScreen() {
     </MobilePanel>
     {session?.role === 'owner' ? <MobilePanel eyebrow="CATALOG MANAGEMENT" title="Add a product">
       <TextInput accessibilityLabel="Product name" placeholder="Product name" value={name} onChangeText={setName} placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
+      <Picker accessibilityLabel="Category" selectedValue={categoryId} onValueChange={(value) => setCategoryId(Number(value))} style={{ color: theme.ink, marginBottom: 8 }}>
+        <Picker.Item label="Choose a category" value={0} />
+        {categories.map((category) => <Picker.Item key={category.id} label={category.name} value={category.id} />)}
+      </Picker>
       <TextInput accessibilityLabel="SKU" placeholder="SKU" value={sku} onChangeText={setSku} autoCapitalize="characters" placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
       <TextInput accessibilityLabel="Price" placeholder="Price (NGN)" value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />
       {photo ? <Image source={{ uri: photo.uri }} style={{ width: 76, height: 76, borderRadius: 8, marginBottom: 8 }} /> : null}

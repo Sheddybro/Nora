@@ -34,7 +34,8 @@ Image writes require `catalog.manage`; the upload endpoint additionally enforces
 
 ## Inventory
 
-- `GET inventory/locations/` lists active locations; `POST` creates a location and requires `inventory.adjust`.
+- `GET inventory/locations/` lists all locations for Owners and active locations for Staff; `POST` creates a location and requires Owner `inventory.adjust`.
+- `PATCH inventory/locations/{location_id}/` edits a business-scoped location; `DELETE` deactivates it without deleting historical records. Both require the Owner role. Duplicate and blank names are rejected.
 - `GET inventory/stock/` returns variant/location balances, reorder point, weighted-average unit cost, and valuation.
 - `GET inventory/movements/` returns the latest 100 append-only ledger events.
 - `POST inventory/movements/` records a receipt or adjustment. `inventory.adjust` is required. Example:

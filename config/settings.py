@@ -4,12 +4,29 @@ import os
 import sys
 import environ
 BASE_DIR=Path(__file__).resolve().parent.parent
+
+def is_test_run(argv=None):
+    argv = sys.argv if argv is None else argv
+    joined = ' '.join(str(part).lower() for part in argv)
+    return 'pytest' in joined or 'py.test' in joined or ' test' in joined or 'manage.py test' in joined
+
+
+def load_local_env(env_path):
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+TESTING=is_test_run()
+load_local_env(BASE_DIR/'.env')
 env=environ.Env(DJANGO_DEBUG=(bool,False))
-TESTING='test' in sys.argv
-environ.Env.read_env(BASE_DIR/'.env')
 SECRET_KEY=env('DJANGO_SECRET_KEY',default='insecure-local-development-only-change-me')
 DEBUG=env('DJANGO_DEBUG')
-if not DEBUG and SECRET_KEY=='insecure-local-development-only-change-me':
+if not DEBUG and SECRET_KEY=='insecure-local-development-only-change-me' and not TESTING:
  raise RuntimeError('Set DJANGO_SECRET_KEY before production deployment')
 ALLOWED_HOSTS=env.list('DJANGO_ALLOWED_HOSTS',default=['localhost','127.0.0.1','0.0.0.0'])
 CSRF_TRUSTED_ORIGINS=env.list('DJANGO_CSRF_TRUSTED_ORIGINS',default=['http://localhost:8000','http://127.0.0.1:8000','http://0.0.0.0:8000'])
