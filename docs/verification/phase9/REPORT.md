@@ -170,10 +170,17 @@ Verification after the smoke test:
 - Screenshot: [Expo login at 390px](./login-no-hero-copy-390.png). This is a viewport screenshot of the scrollable login page, not native-device acceptance.
 - `npx vitest run`: PASS — 17 tests across 5 files. `npx tsc --noEmit`: PASS. Android Expo export: PASS — 2.73 MB Hermes bundle.
 - The internal APK profile `privateDemo` was added with the demo HTTPS API URL; `eas config --platform android --profile privateDemo --json --non-interactive` resolved it successfully. Expo project linked as `@sheddybro/norrisbeauty`.
-- No APK has been produced. `eas build --local --platform android --profile privateDemo` failed because local EAS Android builds require macOS or Linux. The Windows Android SDK installation lacks platform/build tools and command-line tools, Java 11 is installed, and `adb devices -l` shows no connected device.
-- EAS cloud build was not submitted because it would upload repository source to Expo. Install a supported local Android toolchain to continue without a source upload.
+- The user subsequently placed `norrs.apk` at the repository root for private testing (68,584,873 bytes; SHA-256 `EC7FF8AE131FB5129DC556076EE243063AAEC5C6BF1A8AF1F0832EEE0BA84780`). The build's source revision/profile has not been independently verified.
+- The earlier `eas build --local --platform android --profile privateDemo` attempt failed because local EAS Android builds require macOS or Linux. The Windows Android SDK installation lacks platform/build tools and command-line tools, Java 11 is installed, and `adb devices -l` shows no connected device.
+- An Android-first tester guide with web cross-checks and safety instructions is available at `docs/SISTER_TEST_GUIDE_ANDROID_AND_WEB.md`.
 - After restarting the relevant local terminals, Django `/health/` and Expo Web both returned HTTP 200 at ports 8000 and 8081. The hosted PythonAnywhere health and login pages also loaded; the removed copy is absent there.
 - Native Android/iOS acceptance and production release remain blocked. The demo SQLite API must not receive real business records.
+
+### 2026-11-08 Android and web tester guide
+
+- Added [Sister Test Guide](../../SISTER_TEST_GUIDE_ANDROID_AND_WEB.md) with Android-first login, navigation, catalog, stock, POS, customer, permission, and optional offline-queue checks; website cross-checks; safe test-data guidance; and a defect-report template.
+- Updated the mobile API configuration and project status to reflect the APK's presence without claiming its build provenance is verified.
+- Verification: `git diff --check` passed. The local `norrs.apk` was confirmed as 68,584,873 bytes with SHA-256 `EC7FF8AE131FB5129DC556076EE243063AAEC5C6BF1A8AF1F0832EEE0BA84780`. Documentation-only change; no application tests or UI screenshots were required.
 
 ## Decision
 

@@ -51,8 +51,10 @@ The app stores pending stock movements in AsyncStorage, scoped to the authentica
 
 `mobile/eas.json` defines an internal APK profile named `privateDemo` with the HTTPS URL for the temporary PythonAnywhere demo. The Expo project is linked in `mobile/app.json`. This profile is for private QA only; the backend uses disposable SQLite, and real business records must not be entered.
 
-No APK has been built yet. EAS cloud builds upload the app source to Expo; that upload was not started. `eas build --local` was attempted and is unsupported on Windows. The available Android SDK directory has no `platforms`, `build-tools`, or `cmdline-tools`; the installed Java runtime is 11, and there is no attached Android device.
+The user has supplied an APK at the repository root as `norrs.apk` for private testing. The APK's build provenance/profile has not been independently verified. EAS cloud builds upload app source to Expo; the earlier cloud attempt paused at credential setup, and a local build attempt was unsupported on Windows. The available Android SDK directory has no `platforms`, `build-tools`, or `cmdline-tools`; the installed Java runtime is 11.
 
 The Windows machine needs a local Android build toolchain (Android Studio SDK platform/build tools and a supported JDK) before a local APK can be produced without uploading source. The APK will still require a privately provisioned Django account to sign in. This internal demo build is not a Play Store release or production acceptance.
 
 Public mobile release requires a PostgreSQL-backed production API, approved backup/restore and rollback, release security checks, and native-device acceptance. Do not reuse the demo API profile for real users or data.
+
+For a tester-friendly Android-first walkthrough with web cross-checks, see [Sister Test Guide](./SISTER_TEST_GUIDE_ANDROID_AND_WEB.md).
