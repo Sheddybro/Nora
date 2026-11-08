@@ -27,11 +27,18 @@ DJANGO_CSRF_COOKIE_SECURE=true
 ## Start the app
 
 ```bash
+python -m pip install -r requirements.txt
 python manage.py migrate
 python manage.py collectstatic --noinput
 DJANGO_SETTINGS_MODULE=config.production python manage.py check --deploy
 gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
 ```
+
+## PythonAnywhere and demo environments
+
+- Configure the WSGI file to use `config.production`, add the repository root to `sys.path`, and set a strong `DJANGO_SECRET_KEY`, the deployed host, and its HTTPS CSRF origin.
+- Set the web app's virtualenv to the environment where `requirements.txt` was installed, and map `/static/` to the configured `STATIC_ROOT` after running `collectstatic`.
+- PythonAnywhere accounts without PostgreSQL must not use SQLite for real business records. SQLite may be used for a disposable demo only; production requires a PostgreSQL-enabled plan or provider, plus a verified backup and rollback procedure.
 
 ## Notes
 
