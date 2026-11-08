@@ -47,7 +47,8 @@ The deployment setup also passed local dependency installation, Django system ch
 - Updated the Android/web tester guide to direct testers to the login-page button.
 - Verification: `.\.venv\Scripts\python.exe manage.py test core.tests.FoundationTests` — PASS, 19 tests; `.\.venv\Scripts\python.exe manage.py check` — PASS; `git diff --check` — PASS.
 - Local browser verification confirmed the button label, exact Drive URL, new-tab behavior, and link visibility at a 390px viewport. Screenshot captures are saved as `login-apk-download-1440.png` and `login-apk-download-390.png`.
-- This verification is local only; it does not claim the public PythonAnywhere deployment has been updated.
+- PythonAnywhere was updated from GitHub commit `af3e26c` using a fast-forward-only pull. `collectstatic` passed (1 copied, 158 unchanged, 710 post-processed), then the web app was reloaded.
+- Live `/login/?v=af3e26c` verification confirmed the **Download Android APK** link points to the supplied Google Drive URL and opens in a new tab. No deployment secret was exposed.
 
 ## Outstanding release gates
 
