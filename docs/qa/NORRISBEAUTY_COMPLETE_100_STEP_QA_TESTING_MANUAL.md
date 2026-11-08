@@ -2,7 +2,7 @@
 
 **Document status:** execution workbook. A blank result is not a pass. Record the observed result, evidence, and defect reference for every step.  
 **Scope:** Django website, shared `/api/v1/` API, and Expo client.  
-**Important limitations:** customer creation has no dedicated mobile form; purchase orders are single-line in the mobile workspace; POS is online-only; stock queue replay is foreground-only; barcode camera hardware, background sync, and physical-device acceptance are not implemented or verified. Do not mark those limitations as passed.
+**Important limitations:** mobile purchase orders are single-line; POS is online-only; stock queue replay is foreground-only; barcode camera hardware and background sync are not implemented; and physical-device acceptance remains unverified. Customer listing and creation are available in the mobile Customers screen. Do not mark unimplemented/device-only limitations as passed.
 
 ## How to use this manual
 
@@ -363,11 +363,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** No theme action changes business data.  
 **Cross-Platform Verification:** Mobile follows its system color scheme without changing authorization.  
 **Failure Indicators:** Invisible text, unreadable controls, layout shift, or persisted secrets.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** On the shared Owner Inventory page, the theme control switched to dark mode and back and its accessible label changed accordingly. Persistence after navigation/reload, contrast, and mobile color-scheme behavior were not checked.
+**Screenshot/Evidence:** Shared browser interaction on the authenticated Inventory page; no screenshot saved.
+**Bug Reference:** None confirmed.
+**Additional Notes:** Theme toggle interaction passed; full persistence and visual/accessibility checks remain outstanding.
 
 ### STEP 20 — Test dashboard refresh and empty state
 **Platform:** Website  
@@ -435,11 +435,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Verify HTTP status and row counts.  
 **Cross-Platform Verification:** Mobile shows an alert/error without losing safe form state.  
 **Failure Indicators:** Silent failure, generic success, stack trace, or lost unsaved input.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** The notifications panel opened, but `GET /api/v1/notifications/` was refused because the shared local web/API services were stopped. The UI displayed “Failed to fetch”; this does not establish an application API failure. Valid, validation, and authorization error permutations remain untested.
+**Screenshot/Evidence:** Shared browser interaction on the authenticated Inventory page; no screenshot saved.
+**Bug Reference:** None confirmed; backend availability is an environment blocker.
+**Additional Notes:** Retest notification data and form/API errors with a running isolated backend.
 
 ### STEP 24 — Test browser reload and back-button behavior
 **Platform:** Website  
@@ -1471,11 +1471,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Export rows match summary/source rows.  
 **Cross-Platform Verification:** Mobile export is not claimed unless a control exists.  
 **Failure Indicators:** Truncated/incorrect export or misleading export button.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** A Print / save PDF control was present, but the Expo Web print surface did not complete; export output and accuracy could not be verified.
+**Screenshot/Evidence:** No successful print surface or export file captured; see `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Export verification remains open.
+**Additional Notes:** Do not interpret the existing control as a verified export.
 
 ## Phase 9 — Expo mobile UI and functionality (Steps 81–90)
 
@@ -1491,11 +1491,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Only expected auth/health calls occur.  
 **Cross-Platform Verification:** Device reaches `/api/v1/health/`; localhost is not used from phone.  
 **Failure Indicators:** Blank/crash, orientation clipping, or wrong host.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** Expo Web launched against the isolated local API and rendered the shell; Android export passed. No emulator/device was attached, so install, orientation, background/reopen, and device health checks were not verified.
+**Screenshot/Evidence:** No screenshot saved for this step; latest execution details are in `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Expo Web is not a substitute for native startup acceptance.
 
 ### STEP 82 — Test mobile login form and keyboard
 **Platform:** Mobile  
@@ -1503,17 +1503,17 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Testing Objective:** Verify touch inputs, scrolling, keyboard avoidance, errors, and sign-in routing.  
 **Prerequisites:** Device and both accounts.  
 **Exact Navigation:** Mobile launch → login.  
-**Actions to Perform:** Tap fields; type valid/invalid values; open keyboard; scroll; submit; rotate while keyboard is open.  
+**Actions to Perform:** Tap fields; type valid/invalid values; confirm the password is masked initially; tap Show and Hide and confirm the same value remains; open keyboard; scroll; submit; rotate while keyboard is open.
 **Test Data:** Valid and invalid credentials.  
-**Expected Result:** Labels/keyboard do not cover controls; errors are visible; successful login routes to shell.  
+**Expected Result:** Labels/keyboard do not cover controls; password is masked by default and can be revealed or hidden with an accessible control without losing text; errors are visible; successful login routes to shell.
 **Database/API Verification:** Request payload contains only intended fields.  
 **Cross-Platform Verification:** Error semantics match web/API.  
-**Failure Indicators:** Keyboard traps form, password visible, or preview-role bypass.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Failure Indicators:** Keyboard traps form, password is visible by default, visibility toggle loses/changes the password, or preview-role bypass.
+**Test Result:** BLOCKED
+**Actual Result:** Added a Show/Hide password control. The user confirmed on their Android phone that the password starts masked, Show reveals it, Hide masks it again, and the text remains unchanged. Keyboard, rotation, and screen-reader behavior have not been confirmed.
+**Screenshot/Evidence:** User confirmed both visibility states; screenshots were not attached.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Login validation and browser/API sign-in were exercised. `npx vitest run` and `npx tsc --noEmit` pass. Step remains BLOCKED until remaining native keyboard/rotation/accessibility checks are completed.
 
 ### STEP 83 — Test mobile tab navigation and safe areas
 **Platform:** Mobile  
@@ -1527,11 +1527,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Navigation does not mutate data.  
 **Cross-Platform Verification:** Role-specific modules match permission output.  
 **Failure Indicators:** Dead tab, overlap, lost session, or unauthorized tab.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** Owner and Staff Expo Web tabs navigated across their allowed routes with no horizontal document overflow at 390px. Android Back, native safe-area, and device touch behavior remain unverified.
+**Screenshot/Evidence:** No screenshot saved for this step; see `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Expo Web results only.
 
 ### STEP 84 — Test live mobile Catalog
 **Platform:** Mobile  
@@ -1541,15 +1541,15 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Exact Navigation:** **Catalog** tab.  
 **Actions to Perform:** Refresh; search visible fields; stop server; reopen; restore server and retry.  
 **Test Data:** QA product, unknown search.  
-**Expected Result:** Live product/variant data appears; errors are actionable; no demo data is inserted.  
+**Expected Result:** Live product/variant data appears; an unknown barcode displays an explicit no-match message directly in the lookup panel; network errors are visible; no demo data is inserted.
 **Database/API Verification:** Inspect authenticated GET and business scope.  
 **Cross-Platform Verification:** Match web/API product values and active flags.  
 **Failure Indicators:** Hardcoded catalog, stale error, or cross-business item.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** The Owner confirmed on Android that the valid barcode resolves and that, after the update, an invalid barcode displays the no-match message directly under the lookup button. The app clears stale matches when the query changes. Full catalog search, server-stop/recovery, and empty-state checks have not been completed.
+**Screenshot/Evidence:** User confirmed both valid and invalid barcode outcomes; screenshots not provided.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Barcode success/no-match behavior passed on Android. Step remains BLOCKED until remaining refresh, search, and network error/retry checks are completed.
 
 ### STEP 85 — Test mobile Stock and location display
 **Platform:** Mobile  
@@ -1563,11 +1563,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Compare `GET /inventory/stock/` response.  
 **Cross-Platform Verification:** Web Inventory and mobile Stock agree.  
 **Failure Indicators:** Wrong location aggregation, stale balance, or unauthorized write control.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** Expo Stock showed location-specific quantities and low-stock information, but the ₦48,000.00 summary versus ₦48,500.00 batch-cost comparison came from an invalid directly seeded fixture whose variant average remained stale. A valid receipt/checkout/receipt service-flow probe later produced a weighted-average summary of ₦48,875.04 versus ₦48,500.00 in remaining batch costs. The Stock screen was not retested with that valid fixture, and the accounting treatment remains unconfirmed.
+**Screenshot/Evidence:** No screenshot saved for this step; fixture and follow-up details are recorded in QA-015 and `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** QA-015
+**Additional Notes:** Retest with valid transaction-created stock after the weighted-average/COGS treatment is confirmed. Native presentation remains unverified.
 
 ### STEP 86 — Test mobile POS basket and barcode input
 **Platform:** Mobile  
@@ -1581,11 +1581,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** No sale before checkout.  
 **Cross-Platform Verification:** Same variant and available quantity as web.  
 **Failure Indicators:** Camera support implied, over-sale allowed, or wrong location stock.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Earlier Expo Web testing verified location switching, exact/unknown barcode handling, stock cap, and basket removal. The user subsequently confirmed the equivalent Owner Android POS basket checks passed using the Android QA locations and product; no checkout was submitted during Step 86.
+**Screenshot/Evidence:** User confirmation; no screenshot saved. Earlier web/API evidence is summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Android touch/basket flow confirmed. Do not claim camera scanning; keyboard-wedge remains the supported scanner input.
 
 ### STEP 87 — Complete mobile POS checkout
 **Platform:** Mobile  
@@ -1599,11 +1599,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** One Sale/Payment and idempotency key.  
 **Cross-Platform Verification:** Web sales history and inventory update.  
 **Failure Indicators:** POS works offline, duplicate sale, or basket clears on unknown result.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Earlier Expo Web card checkout produced one invoice/payment and one stock deduction. The user additionally confirmed a one-unit Android QA checkout completed successfully, cleared the basket, and reduced QA Main stock once.
+**Screenshot/Evidence:** User confirmation; no screenshot saved. Earlier isolated DB and cross-client evidence is recorded in `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Native-device acceptance remains open.
+**Additional Notes:** Basic online Android checkout is confirmed by the user. Other payment methods and interrupted/uncertain-result retry remain unverified on device.
 
 ### STEP 88 — Test mobile Customers listing and privacy
 **Platform:** Mobile  
@@ -1617,11 +1617,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Compare endpoint query and pagination.  
 **Cross-Platform Verification:** Web Customers page and API agree.  
 **Failure Indicators:** Inactive/cross-business customer, unbounded list, or crash offline.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Expo Customers displayed the active current-business QA customer and omitted the inactive customer; the Staff customer-list API returned only the active record. The user also confirmed on Android that a disposable customer could be created and found by name, email, and phone; a no-match search returned no customer; notes were not displayed in the list; and Staff could see the customer.
+**Screenshot/Evidence:** User-reported Android confirmation; no screenshot saved. Earlier isolated DB and cross-client evidence is recorded in `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** None reported for the checks completed.
+**Additional Notes:** Pagination, API stop/restart, and network-error behavior remain unverified on device.
 
 ### STEP 89 — Test mobile purchasing and More modules
 **Platform:** Mobile  
@@ -1635,11 +1635,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Compare mutations to API records.  
 **Cross-Platform Verification:** Web reflects mobile changes.  
 **Failure Indicators:** Staff sees Owner modules, duplicate order, or demo-only success.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** The user confirmed the Android Owner More modules opened successfully; a disposable supplier and purchase orders were created, placed, partially and fully received, and cancelled; and Staff More showed the expected limited links. Earlier Expo Web evidence for the same flows is summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Screenshot/Evidence:** User-reported Android confirmation; no screenshot saved.
+**Bug Reference:** None reported for the checks completed.
+**Additional Notes:** Rich multi-line purchasing and remaining native-device checks are unverified.
 
 ### STEP 90 — Test mobile offline queue and foreground replay
 **Platform:** Mobile/API  
@@ -1649,15 +1649,15 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Exact Navigation:** Mobile Stock adjustment flow if exposed; otherwise exercise documented queue API/test harness.  
 **Actions to Perform:** Disconnect network; queue a valid movement; background/foreground or restore connectivity; inspect replay; repeat under another user/business and with invalid/permission-conflict data.  
 **Test Data:** Unique movement key, valid and invalid payloads.  
-**Expected Result:** Queue persists in AsyncStorage operational data, replays on app start/connectivity/foreground, preserves key, and surfaces permanent conflicts. POS does not queue.  
+**Expected Result:** Queue persists in AsyncStorage operational data. A pending movement is visible in the Offline Queue panel and beside Record movement; after replay, a visible synced confirmation remains until dismissed. Conflicts remain visible for review. Replay on app start/connectivity/foreground preserves the idempotency key. POS does not queue.
 **Database/API Verification:** One movement after replay; no cross-user/business replay.  
 **Cross-Platform Verification:** Web stock reflects replay.  
 **Failure Indicators:** Background-sync claim, duplicate replay, secret in queue, or silent conflict.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Browser network emulation queued and replayed one adjustment once. On Android, the user confirmed the updated offline-queue status appeared, the adjustment synced after Wi-Fi returned, and Step 90 passed. Earlier the user confirmed restoring Android QA Main stock to its original quantity. Background/foreground lifecycle and conflict cases remain unverified.
+**Screenshot/Evidence:** Isolated DB ledger and balance evidence is summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; Android outcome is user-reported and no screenshot was saved.
+**Bug Reference:** QA-016 resolved; remaining native background/foreground behavior is unverified.
+**Additional Notes:** Browser network emulation is not device offline acceptance; Android confirmation covers the prompted queue status and replay flow only.
 
 ## Phase 10 — cross-platform, security, reliability, and release (Steps 91–100)
 
@@ -1673,11 +1673,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Compare response IDs/fields.  
 **Cross-Platform Verification:** This is the required web-to-mobile proof.  
 **Failure Indicators:** Mobile fixture, stale cache, or different business scope.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** A uniquely named product created in web Catalog appeared after Expo refresh with matching SKU and price.
+**Screenshot/Evidence:** API/web/Expo observations are in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; no screenshot saved for this step.
+**Bug Reference:** None observed in this flow.
+**Additional Notes:** Verified against isolated QA business.
 
 ### STEP 92 — Verify sale synchronization mobile to web
 **Platform:** Both  
@@ -1691,11 +1691,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Count sale/payment/ledger records.  
 **Cross-Platform Verification:** This is the required mobile-to-web proof.  
 **Failure Indicators:** Delayed/duplicate sale, stale balance, or report mismatch.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Expo checkout produced one invoice and payment; web Sales History showed the invoice and web/API inventory reflected one stock deduction.
+**Screenshot/Evidence:** Isolated DB and cross-client evidence is in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; no screenshot saved for this step.
+**Bug Reference:** None observed for synchronization; valuation is tracked separately as QA-015.
+**Additional Notes:** Verified against isolated QA business.
 
 ### STEP 93 — Verify stock synchronization and idempotency across clients
 **Platform:** Both/API  
@@ -1709,11 +1709,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Ledger sum equals batch balances.  
 **Cross-Platform Verification:** Explicitly compare API, web, and mobile values.  
 **Failure Indicators:** Duplicate key, divergent cache, or negative balance.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Offline adjustment replayed once and cleared from the queue; web/API/Expo quantities and movement ledger matched. The batch-cost versus weighted-average question is tracked separately under QA-015 and did not indicate a synchronization or idempotency failure.
+**Screenshot/Evidence:** Exact batch quantities/costs and API response are summarized in QA-015 and `docs/qa/execution/QA_RESULTS_001_TO_100.md`; no screenshot saved for this step.
+**Bug Reference:** QA-015 (separate accounting-method question)
+**Additional Notes:** Unique-key quantity synchronization passed. Native offline lifecycle remains unverified.
 
 ### STEP 94 — Test API input and output security
 **Platform:** API  
@@ -1727,11 +1727,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** No invalid writes or unexpected query scope.  
 **Cross-Platform Verification:** Clients render safe errors rather than raw internals.  
 **Failure Indicators:** Stack trace, secret disclosure, mass assignment, or IDOR.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Isolated probes returned 401 without auth, 404 for another tenant's product, 400 with a structured error for invalid pagination, and 403 for Staff Reports.
+**Screenshot/Evidence:** Responses were captured in the isolated QA run and summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; credentials and tokens were not recorded.
+**Bug Reference:** None observed in these probes.
+**Additional Notes:** This bounded set is not a full endpoint fuzz or penetration test.
 
 ### STEP 95 — Test rate limiting and repeated login failures
 **Platform:** Website/API  
@@ -1745,11 +1745,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** No password/token in logs.  
 **Cross-Platform Verification:** Mobile shows a retry-safe message.  
 **Failure Indicators:** No throttle, permanent lockout without recovery, or sensitive rate-limit detail.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Twelve invalid attempts against the disposable QA account triggered 429 throttles after initial 401 responses. A valid attempt was throttled within the window and succeeded after a 62-second wait.
+**Screenshot/Evidence:** HTTP status sequence and recovery status summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; no password/token was logged as evidence.
+**Bug Reference:** None observed.
+**Additional Notes:** Executed only against the isolated local API and disposable user.
 
 ### STEP 96 — Test HTTPS/production configuration gates
 **Platform:** Website/API  
@@ -1763,11 +1763,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Migrations apply on target database; backups exist.  
 **Cross-Platform Verification:** Mobile API URL uses HTTPS and trusted certificate.  
 **Failure Indicators:** Debug on, insecure cookies, wildcard hosts, SQLite production, or secret committed.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** The prior isolated production deploy-check using a strong temporary QA secret passed without warnings. This did not verify a PostgreSQL deployment, TLS certificate, or staging backup.
+**Screenshot/Evidence:** Prior command result recorded in QA execution history.
+**Bug Reference:** Production staging/database proof remains outstanding.
+**Additional Notes:** Do not infer release readiness from the deploy-check alone.
 
 ### STEP 97 — Run automated regression checks
 **Platform:** Backend/Mobile  
@@ -1781,11 +1781,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Tests cover auth, permissions, tenant scope, stock, purchasing, sales, reports.  
 **Cross-Platform Verification:** Mobile unit tests and bundle export are not physical-device acceptance.  
 **Failure Indicators:** Any failing command, pending migration, TypeScript diagnostic, or dependency error.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** PASS
+**Actual Result:** Rerun on 2026-11-08: `python manage.py test` passed 66/66; `npx vitest run` passed 14/14; `npx tsc --noEmit`, `manage.py check`, `makemigrations --check --dry-run`, Android Expo export, and `git diff --check` passed. `adb devices -l` reported no connected device.
+**Screenshot/Evidence:** Exact commands/results recorded in `docs/qa/execution/QA_RESULTS_001_TO_100.md` and `docs/verification/phase9/REPORT.md`.
+**Bug Reference:** QA-015 remains open despite passing automated regression checks.
+**Additional Notes:** Bundle export is not physical-device acceptance. The shared Expo Web session was disconnected from Metro.
 
 ### STEP 98 — Perform accessibility, performance, and reliability smoke checks
 **Platform:** Both  
@@ -1799,11 +1799,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Server logs contain no unhandled exceptions; writes remain idempotent.  
 **Cross-Platform Verification:** Both clients remain responsive and consistent.  
 **Failure Indicators:** Critical WCAG issue, timeout, crash, memory growth, or data corruption.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** Expo Web Owner/Staff routes were exercised at 390px and had no document-level horizontal overflow. The required 20-product dataset, full accessibility, performance, long-list, device lifecycle, and reliability matrix was not completed.
+**Screenshot/Evidence:** Viewport measurements and limitations are summarized in `docs/qa/execution/QA_RESULTS_001_TO_100.md`; no dedicated screenshots saved.
+**Bug Reference:** Full QA-98 matrix remains open.
+**Additional Notes:** A zero-overflow check alone is not a complete accessibility or performance audit.
 
 ### STEP 99 — Execute go-live and rollback rehearsal
 **Platform:** Both/Operations  
@@ -1817,11 +1817,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Backup restore and migration state are verified.  
 **Cross-Platform Verification:** Mobile production URL and versioned API remain compatible.  
 **Failure Indicators:** Irreversible migration, failed restore, broken static assets, or incompatible API.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** No deployable staging target, backup, rollback, restore, or migration rehearsal was available in this run.
+**Screenshot/Evidence:** None; see `docs/qa/execution/QA_RESULTS_001_TO_100.md`.
+**Bug Reference:** Staging/operations acceptance remains open.
+**Additional Notes:** Do not run destructive reset/rollback steps against the project database.
 
 ### STEP 100 — Make the final acceptance decision
 **Platform:** Both  
@@ -1835,11 +1835,11 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 **Database/API Verification:** Final migration/check/test outputs are attached; no test data remains in production.  
 **Cross-Platform Verification:** Auth, catalog, stock, purchase, POS, and reporting parity is evidenced where implemented.  
 **Failure Indicators:** Blank results, unowned defects, claimed passes without execution, or unsupported features presented as complete.  
-**Test Result:** —  
-**Actual Result:** ____________________  
-**Screenshot/Evidence:** ____________________  
-**Bug Reference:** ____________________  
-**Additional Notes:** ____________________
+**Test Result:** BLOCKED
+**Actual Result:** 51 PASS, 0 FAIL, 49 BLOCKED, 0 NOT APPLICABLE. QA-015 remains open pending accounting-method confirmation and a valid-fixture Stock-screen retest; remaining native Android/iOS acceptance and staging release checks remain incomplete.
+**Screenshot/Evidence:** Final matrix: `docs/qa/execution/QA_RESULTS_001_TO_100.md`; open defect: `docs/qa/execution/QA_BUG_REGISTER.md`.
+**Bug Reference:** QA-015; native device and release checklist blockers.
+**Additional Notes:** Not accepted for production release.
 
 ## Supporting execution guidance
 
@@ -1848,7 +1848,7 @@ Use **PASS**, **FAIL**, **BLOCKED**, or **NOT APPLICABLE**. A code-inspection li
 - **Implemented web foundation:** login/logout, password reset, health endpoints, owner/staff dashboard shells, responsive Bootstrap workspaces, theme toggle, products, inventory, POS, sales, purchases, customers, reports, staff, and settings routes.
 - **Implemented API:** versioned auth/token lifecycle, business profile, staff members, catalog/categories/products/images/stock history, locations/stock/movements/transfers/adjustments/stocktakes/alerts, sales/checkout/refund, customers, suppliers/purchase orders/place/cancel/receive, expenses, report summary, audit events, and notifications.
 - **Implemented mobile:** SecureStore auth, role-aware tabs, live catalog/stock, online POS with idempotency, customer listing, Owner purchasing lifecycle, and foreground stock queue.
-- **Not complete or not accepted:** tenant provisioning/subscriptions, user-configurable permission UI, full background sync, camera barcode integration, customer-creation UI, richer multi-line mobile purchasing, payment gateway integration, physical-device/E2E acceptance, and some demo-only dashboard/finance surfaces.
+- **Not complete or not accepted:** tenant provisioning/subscriptions, user-configurable permission UI, full background sync, camera barcode integration, richer multi-line mobile purchasing, payment gateway integration, physical-device/E2E acceptance, and some demo-only dashboard/finance surfaces.
 
 ### Browser/mobile checklist
 

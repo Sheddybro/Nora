@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import * as Print from 'expo-print';
+import { useFocusEffect } from '@react-navigation/native';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './NativeWorkspaceScreen';
 import {
   addStaffMember,
@@ -18,6 +19,7 @@ import {
 } from '../../lib/workspace';
 import { useAuth } from './AuthContext';
 import { buildIdempotencyKey } from '../../lib/offlineQueue';
+import { RequestSequence } from '../../lib/requestSequence';
 
 type Props = { module: 'reports' | 'staff' | 'settings' | 'sales' };
 const money = (value: string | number) => `₦${Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -54,28 +56,36 @@ export default function WorkspaceManagement({ module }: Props) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const requestSequence = useRef(new RequestSequence()).current;
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
+    const request = requestSequence.begin();
     setLoading(true);
     setError('');
     try {
       if (module === 'reports') {
         const [nextReport, nextExpenses] = await Promise.all([fetchPeriodReport(period), fetchBusinessExpenses()]);
+        if (!requestSequence.isCurrent(request)) return;
         setReport(nextReport);
         setExpenses(nextExpenses);
       } else if (module === 'staff') {
-        setMembers(await fetchStaffMembers());
+        const nextMembers = await fetchStaffMembers();
+        if (requestSequence.isCurrent(request)) setMembers(nextMembers);
       } else if (module === 'sales') {
-        setSales(await fetchWorkspaceSales());
+        const nextSales = await fetchWorkspaceSales();
+        if (requestSequence.isCurrent(request)) setSales(nextSales);
       }
     } catch (requestError) {
-      setError((requestError as Error).message);
+      if (requestSequence.isCurrent(request)) setError((requestError as Error).message);
     } finally {
-      setLoading(false);
+      if (requestSequence.isCurrent(request)) setLoading(false);
     }
-  };
+  }, [module, period, requestSequence]);
 
-  useEffect(() => { void refresh(); }, [module, period]);
+  useFocusEffect(useCallback(() => {
+    void refresh();
+    return () => requestSequence.invalidate();
+  }, [refresh, requestSequence]));
 
   const addMember = async () => {
     if (!username.trim()) return setError('Enter an existing user’s username.');

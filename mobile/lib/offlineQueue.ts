@@ -127,6 +127,13 @@ export async function getQueuedMutations(userId?: number, businessId?: number): 
   return queue.filter((item) => item.userId === userId && item.businessId === businessId);
 }
 
+export function getMutationQueueStatus(
+  mutationId: string,
+  queue: OfflineMutation[],
+): OfflineMutationStatus | 'synced' {
+  return queue.find((item) => item.id === mutationId)?.status ?? 'synced';
+}
+
 export async function markMutationConflict(id: string, reason: string): Promise<void> {
   await updateQueue((queue) => queue.map((item) => (
     item.id === id ? { ...item, status: 'conflict', conflict: reason } as OfflineMutation : item

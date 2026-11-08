@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { MobilePanel, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
-import { checkoutSale, fetchInventoryStock, fetchProducts, fetchStockLocations, searchProductsByBarcode, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
+import { checkoutSale, fetchInventoryStock, fetchProducts, fetchStockLocations, normalizeLocationId, searchProductsByBarcode, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
 import { buildIdempotencyKey } from '../lib/offlineQueue';
+import { RequestSequence } from '../lib/requestSequence';
 
 const naira = (amount: number) => `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -22,15 +24,30 @@ export default function PosScreen() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const requestSequence = useRef(new RequestSequence()).current;
 
-  const refresh = () => Promise.all([fetchProducts(), fetchInventoryStock(), fetchStockLocations()]).then(([nextProducts, nextStock, nextLocations]) => {
-    setProducts(nextProducts);
-    setStock(nextStock);
-    setLocations(nextLocations);
-    setLocationId((current) => current || nextLocations[0]?.id || 0);
-  }).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
+  const refresh = useCallback(async () => {
+    const request = requestSequence.begin();
+    setIsLoading(true);
+    setError('');
+    try {
+      const [nextProducts, nextStock, nextLocations] = await Promise.all([fetchProducts(), fetchInventoryStock(), fetchStockLocations()]);
+      if (!requestSequence.isCurrent(request)) return;
+      setProducts(nextProducts);
+      setStock(nextStock);
+      setLocations(nextLocations);
+      setLocationId((current) => current || nextLocations[0]?.id || 0);
+    } catch (requestError) {
+      if (requestSequence.isCurrent(request)) setError((requestError as Error).message);
+    } finally {
+      if (requestSequence.isCurrent(request)) setIsLoading(false);
+    }
+  }, [requestSequence]);
 
-  useEffect(() => { void refresh(); }, []);
+  useFocusEffect(useCallback(() => {
+    void refresh();
+    return () => requestSequence.invalidate();
+  }, [refresh, requestSequence]));
   useEffect(() => {
     setCheckoutKey(buildIdempotencyKey('mobile-sale'));
   }, [basket, locationId, paymentMethod, amountPaid]);
@@ -128,7 +145,7 @@ export default function PosScreen() {
     {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
     <MobilePanel eyebrow="CHECKOUT LOCATION" title="Select stock location">
       <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7 }}>
-        <Picker selectedValue={locationId} onValueChange={setLocationId} accessibilityLabel="Checkout location">
+        <Picker selectedValue={locationId} onValueChange={(value) => setLocationId(normalizeLocationId(value))} accessibilityLabel="Checkout location">
           <Picker.Item label="Choose location" value={0} />
           {locations.map((location) => <Picker.Item key={location.id} label={location.name} value={location.id} />)}
         </Picker>

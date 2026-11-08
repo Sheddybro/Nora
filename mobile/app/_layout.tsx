@@ -64,7 +64,7 @@ function AppShell() {
 
 	return (
 		<SafeAreaProvider>
-			<Tabs initialRouteName={session ? 'index' : 'login'} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }} tabBar={(props) => <MobileTabBar {...props} role={effectiveRole} colors={colors} />}>
+			<Tabs initialRouteName={session ? 'index' : 'login'} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }} tabBar={(props) => session ? <MobileTabBar {...props} role={effectiveRole} colors={colors} /> : null}>
 				<Tabs.Screen name="index" options={{ title: 'Overview', href: session ? '/index' : null }} />
 				<Tabs.Screen name="catalog" options={{ title: 'Catalog', href: session ? '/catalog' : null }} />
 				<Tabs.Screen name="pos" options={{ title: 'Sell', href: session ? '/pos' : null }} />

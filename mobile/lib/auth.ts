@@ -26,6 +26,12 @@ export interface AuthSession {
 const SESSION_KEY = 'norrisbeauty.auth.session';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '');
 let webSession: AuthSession | null = null;
+let refreshInFlight: Promise<AuthSession> | null = null;
+
+export function getPasswordResetUrl(apiBaseUrl = API_BASE_URL): string {
+  const apiOrigin = apiBaseUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+  return `${apiOrigin}/password-reset/`;
+}
 
 export class ApiRequestError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -108,7 +114,14 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, requir
   });
 
   if (response.status === 401 && requireAuth && session && !path.includes('/auth/refresh/')) {
-    const refreshed = await refreshSession(session.refreshToken);
+    const currentSession = await loadSession();
+    if (!currentSession) {
+      const body = await readJsonBody(response);
+      throw new ApiRequestError(body?.error?.message || body?.detail || 'Your session has expired. Sign in again.', response.status);
+    }
+    const refreshed = currentSession.accessToken === session.accessToken
+      ? await refreshSession(session.refreshToken)
+      : currentSession;
     headers.set('Authorization', `Bearer ${refreshed.accessToken}`);
     const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
@@ -168,28 +181,41 @@ export async function loginWithCredentials(username: string, password: string): 
 }
 
 export async function refreshSession(refreshToken: string): Promise<AuthSession> {
-  const payload = await apiRequest<{ access: string; refresh: string }>(
-    '/auth/refresh/',
-    {
-      method: 'POST',
-      body: JSON.stringify({ refresh: refreshToken }),
-    },
-    false,
-  );
+  if (refreshInFlight) return refreshInFlight;
 
-  const session = await loadSession();
-  if (!session) {
-    throw new Error('No saved session available for refresh.');
+  refreshInFlight = (async () => {
+    const session = await loadSession();
+    if (!session) {
+      throw new Error('No saved session available for refresh.');
+    }
+    if (session.refreshToken !== refreshToken) {
+      return session;
+    }
+
+    const payload = await apiRequest<{ access: string; refresh: string }>(
+      '/auth/refresh/',
+      {
+        method: 'POST',
+        body: JSON.stringify({ refresh: refreshToken }),
+      },
+      false,
+    );
+
+    const refreshed: AuthSession = {
+      ...session,
+      accessToken: payload.access,
+      refreshToken: payload.refresh,
+    };
+
+    await saveSession(refreshed);
+    return refreshed;
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
-
-  const refreshed: AuthSession = {
-    ...session,
-    accessToken: payload.access,
-    refreshToken: payload.refresh,
-  };
-
-  await saveSession(refreshed);
-  return refreshed;
 }
 
 export async function logoutSession(): Promise<void> {

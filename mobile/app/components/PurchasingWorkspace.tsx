@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './NativeWorkspaceScreen';
 import { fetchProducts, fetchStockLocations, type Product, type StockLocation } from '../../lib/catalog';
 import { buildIdempotencyKey } from '../../lib/offlineQueue';
 import { cancelPurchaseOrder, createPurchaseOrder, createSupplier, fetchPurchaseOrders, fetchSuppliers, placePurchaseOrder, receivePurchaseOrderLine, type PurchaseOrder, type Supplier } from '../../lib/purchasing';
+import { RequestSequence } from '../../lib/requestSequence';
 
 const inputStyle = (theme: ReturnType<typeof useMobileTheme>) => ({ minHeight: 44, borderColor: theme.line, borderWidth: 1 as const, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 });
 
@@ -29,10 +31,15 @@ export default function PurchasingWorkspace() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const requestSequence = useRef(new RequestSequence()).current;
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
+    const request = requestSequence.begin();
+    setIsLoading(true);
+    setError('');
     try {
       const [nextSuppliers, nextOrders, nextProducts, nextLocations] = await Promise.all([fetchSuppliers(), fetchPurchaseOrders(), fetchProducts(), fetchStockLocations()]);
+      if (!requestSequence.isCurrent(request)) return;
       setSuppliers(nextSuppliers);
       setOrders(nextOrders);
       setProducts(nextProducts);
@@ -40,15 +47,17 @@ export default function PurchasingWorkspace() {
       setSupplierId((current) => current || nextSuppliers[0]?.id || 0);
       setLocationId((current) => current || nextLocations[0]?.id || 0);
       setVariantId((current) => current || nextProducts.flatMap((product) => product.variants).find((variant) => variant.is_active)?.id || 0);
-      setError('');
     } catch (requestError) {
-      setError((requestError as Error).message);
+      if (requestSequence.isCurrent(request)) setError((requestError as Error).message);
     } finally {
-      setIsLoading(false);
+      if (requestSequence.isCurrent(request)) setIsLoading(false);
     }
-  };
+  }, [requestSequence]);
 
-  useEffect(() => { void refresh(); }, []);
+  useFocusEffect(useCallback(() => {
+    void refresh();
+    return () => requestSequence.invalidate();
+  }, [refresh, requestSequence]));
   useEffect(() => {
     setOrderIdempotencyKey(buildIdempotencyKey('mobile-purchase-order'));
   }, [supplierId, locationId, variantId, quantity, unitCost]);

@@ -18,8 +18,10 @@ vi.mock('../lib/auth', () => ({ apiRequest: apiRequestMock }));
 
 import {
   clearQueuedMutations,
+  getMutationQueueStatus,
   getQueuedMutations,
   queueOfflineMutation,
+  subscribeToQueue,
   syncQueuedMutations,
 } from '../lib/offlineQueue';
 
@@ -54,6 +56,33 @@ beforeEach(async () => {
 });
 
 describe('offline stock movement queue', () => {
+  it('notifies the Inventory screen when a movement is queued and synced', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToQueue(listener);
+    apiRequestMock.mockResolvedValueOnce({});
+
+    await stockMovement();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await syncQueuedMutations(session);
+    expect(listener).toHaveBeenCalledTimes(3);
+    expect(await getQueuedMutations(session.user.id, session.business.id)).toEqual([]);
+
+    unsubscribe();
+  });
+
+  it('keeps a visible synced status after a movement leaves the pending queue', async () => {
+    const mutation = await stockMovement();
+    const pending = await getQueuedMutations(session.user.id, session.business.id);
+    expect(getMutationQueueStatus(mutation.id, pending)).toBe('queued');
+
+    apiRequestMock.mockResolvedValueOnce({});
+    await syncQueuedMutations(session);
+
+    const completed = await getQueuedMutations(session.user.id, session.business.id);
+    expect(getMutationQueueStatus(mutation.id, completed)).toBe('synced');
+  });
+
   it('persists mutations and only returns the authenticated user and business scope', async () => {
     await stockMovement();
     await stockMovement(8, session.business.id);

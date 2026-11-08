@@ -537,6 +537,9 @@
   const drawChart = (chart, data) => {
     if (!chart) return;
     chart.replaceChildren();
+    const columnCount = Math.max(data.labels.length, 1);
+    chart.style.setProperty('--chart-columns', columnCount);
+    chart.dataset.chartDensity = columnCount > 14 ? 'dense' : columnCount > 7 ? 'compact' : 'regular';
     const values = data.values.map(Number);
     const max = Math.max(...values, 0);
     data.labels.forEach((label, index) => {
@@ -1038,7 +1041,7 @@
   const initialize = async () => {
     try {
       await initNotifications();
-      if (!page) await initDashboard();
+      if (!page || page === 'dashboard') await initDashboard();
       else if (loaders[page]) await loaders[page]();
     } catch (error) { showError(error.message); }
     finally { if (loading) loading.hidden = true; }

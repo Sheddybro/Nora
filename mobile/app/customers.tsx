@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
 import { createCustomer, fetchCustomers, type Customer } from '../lib/customers';
+import { RequestSequence } from '../lib/requestSequence';
 
 export default function CustomersScreen() {
   const theme = useMobileTheme();
@@ -15,18 +17,22 @@ export default function CustomersScreen() {
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [submittedSearch, setSubmittedSearch] = useState('');
+  const requestSequence = useRef(new RequestSequence()).current;
 
-  const refresh = async (query = '') => {
+  const refresh = useCallback(async (query: string) => {
+    const request = requestSequence.begin();
     setIsLoading(true);
     setError('');
     try {
-      setCustomers(await fetchCustomers(query));
+      const nextCustomers = await fetchCustomers(query);
+      if (requestSequence.isCurrent(request)) setCustomers(nextCustomers);
     } catch (requestError) {
-      setError((requestError as Error).message);
+      if (requestSequence.isCurrent(request)) setError((requestError as Error).message);
     } finally {
-      setIsLoading(false);
+      if (requestSequence.isCurrent(request)) setIsLoading(false);
     }
-  };
+  }, [requestSequence]);
 
   const handleCreate = async () => {
     const cleanedName = formName.trim();
@@ -57,13 +63,16 @@ export default function CustomersScreen() {
     }
   };
 
-  useEffect(() => { void refresh(); }, []);
+  useFocusEffect(useCallback(() => {
+    void refresh(submittedSearch);
+    return () => requestSequence.invalidate();
+  }, [refresh, requestSequence, submittedSearch]));
 
   return <NativeWorkspaceScreen eyebrow="RELATIONSHIPS" title="Customers" description="Browse and add customer contacts for the active business.">
     <MobilePanel eyebrow="CUSTOMER DIRECTORY" title={`${customers.length} ${customers.length === 1 ? 'customer' : 'customers'}`}>
       <View style={{ flexDirection: 'row', gap: 7 }}>
-        <TextInput accessibilityLabel="Search customers" placeholder="Name, email or phone" value={search} onChangeText={setSearch} onSubmitEditing={() => void refresh(search)} returnKeyType="search" placeholderTextColor={theme.muted} style={{ flex: 1, minHeight: 44, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12 }} />
-        <Pressable accessibilityRole="button" onPress={() => void refresh(search)} style={[nativeStyles.button, { borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 10 }}>Search</Text></Pressable>
+        <TextInput accessibilityLabel="Search customers" placeholder="Name, email or phone" value={search} onChangeText={setSearch} onSubmitEditing={() => setSubmittedSearch(search)} returnKeyType="search" placeholderTextColor={theme.muted} style={{ flex: 1, minHeight: 44, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12 }} />
+        <Pressable accessibilityRole="button" onPress={() => setSubmittedSearch(search)} style={[nativeStyles.button, { borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 10 }}>Search</Text></Pressable>
       </View>
 
       <View style={{ marginTop: 12 }}>

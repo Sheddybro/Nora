@@ -72,7 +72,7 @@ Variant valuation uses weighted-average cost, rounded to two decimal places. Rec
 
 ## Known limitations
 
-Expo image picking, product creation/image upload, stock receipt/adjustment, barcode lookup, POS checkout, customer listing, and core supplier/purchase-order workflows have code-level API integration but have not yet been verified on a physical Android device. External image URLs are not fetched or validated as owned assets. The offline stock queue is foreground-only; customer creation and advanced purchasing order editing remain incomplete.
+Expo image picking, product creation/image upload, stock receipt/adjustment, barcode lookup, POS checkout, customer listing/creation, and core supplier/purchase-order workflows have code-level API integration but have not yet been verified on a physical Android device. External image URLs are not fetched or validated as owned assets. The offline stock queue is foreground-only; advanced purchasing order editing remains incomplete.
 
 ## Verification evidence
 

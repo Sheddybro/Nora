@@ -140,7 +140,7 @@ def mobile_logout(request):
     serializer.is_valid(raise_exception=True)
     try:
         refresh = RefreshToken(serializer.validated_data["refresh"])
-        if refresh.get("user_id") != request.user.pk or refresh.get("membership_id") != request.user.active_membership.pk:
+        if str(refresh.get("user_id")) != str(request.user.pk) or refresh.get("membership_id") != request.user.active_membership.pk:
             return Response({"detail": "Refresh token does not belong to this session.", "code": "token_mismatch"}, status=status.HTTP_403_FORBIDDEN)
         refresh.blacklist()
     except TokenError:

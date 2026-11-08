@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { MobilePanel, MobileRow, NativeWorkspaceScreen, nativeStyles, useMobileTheme } from './components/NativeWorkspaceScreen';
 import { createStockMovement, fetchInventoryStock, fetchProducts, fetchStockLocations, searchProductsByBarcode, type InventoryStock, type Product, type StockLocation } from '../lib/catalog';
-import { buildIdempotencyKey, getQueuedMutations, queueOfflineMutation, removeQueuedMutation, subscribeToQueue, type OfflineMutation } from '../lib/offlineQueue';
+import { buildIdempotencyKey, getMutationQueueStatus, getQueuedMutations, queueOfflineMutation, removeQueuedMutation, subscribeToQueue, type OfflineMutation, type OfflineMutationStatus } from '../lib/offlineQueue';
 import { useAuth } from './components/AuthContext';
+import { RequestSequence } from '../lib/requestSequence';
 
 export default function InventoryScreen() {
   const theme = useMobileTheme();
@@ -24,20 +26,45 @@ export default function InventoryScreen() {
   const [barcodeQuery, setBarcodeQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<OfflineMutation[]>([]);
+  const [queueFeedback, setQueueFeedback] = useState<{ id: string; status: OfflineMutationStatus | 'synced' } | null>(null);
+  const requestSequence = useRef(new RequestSequence()).current;
 
-  const refresh = () => Promise.all([fetchInventoryStock(), fetchProducts(), fetchStockLocations(), getQueuedMutations()]).then(([nextStock, nextProducts, nextLocations, nextQueue]) => {
-    setStock(nextStock); setProducts(nextProducts); setLocations(nextLocations);
-    setPendingQueue(session ? nextQueue.filter((item) => item.userId === session.user.id && item.businessId === session.business.id) : []);
-    setVariantId((current) => current || nextProducts.flatMap((product) => product.variants).find((variant) => variant.is_active)?.id || 0);
-    setLocationId((current) => current || nextLocations[0]?.id || 0);
-  }).catch((requestError: Error) => setError(requestError.message)).finally(() => setIsLoading(false));
-  useEffect(() => { refresh(); }, []);
+  const refresh = useCallback(async () => {
+    const request = requestSequence.begin();
+    setIsLoading(true);
+    setError('');
+    try {
+      const [nextStock, nextProducts, nextLocations, nextQueue] = await Promise.all([fetchInventoryStock(), fetchProducts(), fetchStockLocations(), getQueuedMutations()]);
+      if (!requestSequence.isCurrent(request)) return;
+      setStock(nextStock);
+      setProducts(nextProducts);
+      setLocations(nextLocations);
+      setPendingQueue(session ? nextQueue.filter((item) => item.userId === session.user.id && item.businessId === session.business.id) : []);
+      setVariantId((current) => current || nextProducts.flatMap((product) => product.variants).find((variant) => variant.is_active)?.id || 0);
+      setLocationId((current) => current || nextLocations[0]?.id || 0);
+    } catch (requestError) {
+      if (requestSequence.isCurrent(request)) setError((requestError as Error).message);
+    } finally {
+      if (requestSequence.isCurrent(request)) setIsLoading(false);
+    }
+  }, [requestSequence, session]);
+
+  useFocusEffect(useCallback(() => {
+    void refresh();
+    return () => requestSequence.invalidate();
+  }, [refresh, requestSequence]));
 
   useEffect(() => {
     if (!session) return;
     const refreshQueue = () => {
       void getQueuedMutations(session.user.id, session.business.id)
-        .then(setPendingQueue)
+        .then((queue) => {
+          setPendingQueue(queue);
+          setQueueFeedback((current) => {
+            if (!current || current.status === 'conflict') return current;
+            return { ...current, status: getMutationQueueStatus(current.id, queue) };
+          });
+        })
         .catch((requestError: Error) => setError(requestError.message));
     };
     refreshQueue();
@@ -78,7 +105,7 @@ export default function InventoryScreen() {
       setError('Choose a variant and location, then enter a batch, whole-unit quantity, and reason.'); return;
     }
     if (kind === 'receipt' && (parsedQuantity < 1 || !unitCost.trim())) { setError('Receipts need a positive quantity and unit cost.'); return; }
-    setIsSaving(true); setError('');
+    setIsSaving(true); setError(''); setQueueFeedback(null);
     const idempotencyKey = buildIdempotencyKey('mobile-stock');
     const payload = {
       kind,
@@ -102,7 +129,8 @@ export default function InventoryScreen() {
       if (isLikelyOffline) {
         if (!session) throw requestError;
         try {
-          await queueOfflineMutation({ userId: session.user.id, businessId: session.business.id, resource: '/inventory/movements/', method: 'POST', payload, idempotencyKey });
+          const mutation = await queueOfflineMutation({ userId: session.user.id, businessId: session.business.id, resource: '/inventory/movements/', method: 'POST', payload, idempotencyKey });
+          setQueueFeedback({ id: mutation.id, status: mutation.status });
           setPendingQueue(await getQueuedMutations(session.user.id, session.business.id));
           setError('Offline queue saved. The movement will sync when connectivity returns.');
           Alert.alert('Offline sync queued', 'The movement was stored locally and will be reconciled with the server when the device reconnects.');
@@ -127,7 +155,7 @@ export default function InventoryScreen() {
     </MobilePanel>
     <MobilePanel eyebrow="OFFLINE QUEUE" title={`Queued changes · ${pendingQueue.length}`}>
       {pendingQueue.length ? pendingQueue.map((item) => <View key={item.id} style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: theme.line }}>
-        <Text style={{ color: theme.ink, fontSize: 10, fontWeight: '700' }}>{item.status === 'conflict' ? 'Needs review' : 'Waiting to sync'} · {item.resource}</Text>
+        <Text style={{ color: theme.ink, fontSize: 10, fontWeight: '700' }}>{item.status === 'conflict' ? 'Needs review' : item.status === 'syncing' ? 'Syncing' : 'Waiting to sync'} · {item.resource}</Text>
         {item.conflict ? <Text style={{ color: theme.rose, fontSize: 9, lineHeight: 14, marginTop: 4 }}>{item.conflict}</Text> : <Text style={{ color: theme.muted, fontSize: 9, marginTop: 4 }}>{new Date(item.createdAt).toLocaleString()}</Text>}
         {item.status === 'conflict' ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss conflicted stock movement" onPress={async () => { await removeQueuedMutation(item.id); setPendingQueue(await getQueuedMutations(session?.user.id, session?.business.id)); }} style={[nativeStyles.button, { alignSelf: 'flex-start', marginTop: 6, borderWidth: 1, borderColor: theme.line }]}><Text style={{ color: theme.ink, fontSize: 10 }}>Dismiss conflict</Text></Pressable> : null}
       </View>) : <Text style={{ color: theme.muted, fontSize: 10 }}>No pending offline changes.</Text>}
@@ -147,6 +175,26 @@ export default function InventoryScreen() {
       {[[batchNumber, setBatchNumber, 'Batch number'], [quantity, setQuantity, 'Quantity change'], [reason, setReason, 'Reason']].map(([valueText, setter, label]) => <TextInput key={label as string} accessibilityLabel={label as string} placeholder={label as string} value={valueText as string} onChangeText={setter as (value: string) => void} placeholderTextColor={theme.muted} keyboardType={label === 'Quantity change' ? 'number-pad' : 'default'} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} />)}
       {kind === 'receipt' ? <TextInput accessibilityLabel="Unit cost" placeholder="Unit cost (NGN)" value={unitCost} onChangeText={setUnitCost} keyboardType="decimal-pad" placeholderTextColor={theme.muted} style={{ minHeight: 46, borderColor: theme.line, borderWidth: 1, borderRadius: 7, color: theme.ink, paddingHorizontal: 12, marginBottom: 8 }} /> : null}
       {error ? <Text accessibilityRole="alert" style={{ color: theme.rose, paddingVertical: 8, fontSize: 10 }}>{error}</Text> : null}
+      {queueFeedback ? <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7, padding: 9, marginBottom: 8 }}>
+        <Text accessibilityLiveRegion="polite" style={{ color: queueFeedback.status === 'conflict' ? theme.rose : theme.ink, fontSize: 10, fontWeight: '700' }}>
+          {queueFeedback.status === 'conflict'
+            ? 'Offline change needs review'
+            : queueFeedback.status === 'syncing'
+              ? 'Offline change syncing'
+              : queueFeedback.status === 'synced'
+                ? 'Offline change synced'
+                : 'Offline change saved · Waiting to sync'}
+        </Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Dismiss offline sync status" onPress={() => setQueueFeedback(null)} style={{ alignSelf: 'flex-start', paddingTop: 6 }}>
+          <Text style={{ color: theme.muted, fontSize: 9 }}>Dismiss</Text>
+        </Pressable>
+      </View> : null}
+      {pendingQueue.length ? <View style={{ borderColor: theme.line, borderWidth: 1, borderRadius: 7, padding: 9, marginBottom: 8 }}>
+        <Text style={{ color: theme.ink, fontSize: 10, fontWeight: '700', marginBottom: 4 }}>Offline changes · {pendingQueue.length}</Text>
+        {pendingQueue.map((item) => <Text key={item.id} accessibilityLiveRegion="polite" style={{ color: item.status === 'conflict' ? theme.rose : theme.muted, fontSize: 9, lineHeight: 14 }}>
+          {item.status === 'conflict' ? 'Needs review' : item.status === 'syncing' ? 'Syncing' : 'Waiting to sync'} · {item.resource}
+        </Text>)}
+      </View> : null}
       <Pressable accessibilityRole="button" disabled={isSaving} onPress={saveMovement} style={[nativeStyles.button, { backgroundColor: theme.rose, opacity: isSaving ? 0.6 : 1 }]}><Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{isSaving ? 'Recording…' : 'Record movement'}</Text></Pressable>
     </MobilePanel> : null}
   </NativeWorkspaceScreen>;

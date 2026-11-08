@@ -143,6 +143,28 @@ class FoundationTests(TestCase):
     self.assertEqual(me.status_code,200)
     self.assertEqual(me.json()['role'],'owner')
 
+ def test_rotated_mobile_refresh_token_can_be_logged_out(self):
+    user=get_user_model().objects.create_user(username='mobile-logout-owner',password='secure-pass-123')
+    business=Business.objects.create(name='Mobile Logout Business')
+    Membership.objects.create(user=user,business=business,role=Membership.OWNER)
+    login=self.client.post('/api/v1/auth/login/',{'username':user.username,'password':'secure-pass-123'},content_type='application/json')
+    self.assertEqual(login.status_code,200)
+
+    refreshed=self.client.post('/api/v1/auth/refresh/',{'refresh':login.json()['refresh']},content_type='application/json')
+    self.assertEqual(refreshed.status_code,200)
+
+    payload=refreshed.json()
+    logout=self.client.post(
+        '/api/v1/auth/logout/',
+        {'refresh':payload['refresh']},
+        content_type='application/json',
+        HTTP_AUTHORIZATION=f"Bearer {payload['access']}",
+    )
+    self.assertEqual(logout.status_code,204)
+
+    revoked=self.client.post('/api/v1/auth/refresh/',{'refresh':payload['refresh']},content_type='application/json')
+    self.assertEqual(revoked.status_code,401)
+
  def test_staff_api_permissions_use_default_role_access(self):
     user=get_user_model().objects.create_user(username='api-staff',password='secure-pass-123')
     business=Business.objects.create(name='API Staff Business')

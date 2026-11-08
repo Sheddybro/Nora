@@ -22,11 +22,11 @@ Status values are PASS, FAIL, BLOCKED, or NOT APPLICABLE. Evidence is intentiona
 | 16 | PASS | Owner dashboard loaded after real login with Owner account context. |
 | 17 | BLOCKED | Staff browser session was not executed in this run. |
 | 18 | PASS | Products and POS workspace navigation loaded through the real browser. |
-| 19 | BLOCKED | Theme persistence was not captured. |
+| 19 | BLOCKED | The shared Owner Inventory page switched to dark mode and back, and the control label updated. Persistence across navigation/reload, contrast, and mobile color-scheme behavior were not checked. |
 | 20 | BLOCKED | Empty-state/refresh comparison was not fully executed. |
 | 21 | BLOCKED | Required 1440/768/390 responsive evidence set was not completed. |
 | 22 | BLOCKED | Full keyboard/screen-reader review was not completed. |
-| 23 | BLOCKED | Notification and error-presentation permutations were not completed. |
+| 23 | BLOCKED | The notifications panel opened; its API request failed with connection refused because the shared web/API services were stopped, and the UI showed “Failed to fetch.” This is an environment-blocked observation, not a confirmed application defect; validation/authorization error permutations remain untested. |
 | 24 | PASS | Browser navigation and reload were exercised during Products/POS navigation. |
 | 25 | PASS | Branded logo rendered in the live authenticated shell. |
 | 26 | PASS | Products page listed QA-Serum-30, SKU, price, category, and active status. |
@@ -83,24 +83,26 @@ Status values are PASS, FAIL, BLOCKED, or NOT APPLICABLE. Evidence is intentiona
 | 77 | BLOCKED | Staff report restriction was not manually exercised. |
 | 78 | BLOCKED | Audit/notification visual inspection was not captured. |
 | 79 | BLOCKED | Dashboard/report cross-screen reconciliation was not completed. |
-| 80 | NOT APPLICABLE | No export acceptance surface was available to execute in this build. |
-| 81 | BLOCKED | No Android target; Expo startup was not accepted from Expo Web alone. |
-| 82 | BLOCKED | No Android target for keyboard/touch acceptance. |
-| 83 | BLOCKED | No Android target for tabs/safe-area acceptance. |
-| 84 | BLOCKED | No Android target for live mobile catalog acceptance. |
-| 85 | BLOCKED | No Android target for mobile stock acceptance. |
-| 86 | BLOCKED | No Android target for mobile POS/barcode acceptance. |
-| 87 | BLOCKED | No Android target for mobile checkout acceptance. |
-| 88 | BLOCKED | No Android target for mobile customer-list acceptance. |
-| 89 | BLOCKED | No Android target for mobile purchasing acceptance. |
-| 90 | BLOCKED | Offline queue unit tests pass, but device/network replay was not executed. |
-| 91 | BLOCKED | Cross-client synchronization requires an available mobile client/device. |
-| 92 | BLOCKED | Mobile-to-web sale synchronization requires an available mobile client/device. |
-| 93 | BLOCKED | Mobile stock synchronization requires an available mobile client/device. |
+| 80 | BLOCKED | Reports exposed a Print / save PDF control, but the Expo Web print surface did not complete; export correctness remains unverified. |
+| 81 | BLOCKED | Expo Web was cold-started and rendered against the isolated QA API; Android bundle export passed. No emulator/device is attached, so install, rotation, and native startup remain unverified. |
+| 82 | BLOCKED | User confirmed on their Android phone that the password is masked by default, Show reveals it, Hide remasks it, and its text is preserved. Remaining keyboard, rotation, and screen-reader checks are unverified; screenshots were not attached. Vitest and TypeScript pass. |
+| 83 | BLOCKED | Owner and Staff Expo Web tab routes loaded and had no document-level horizontal overflow at 390px. Android Back, native safe-area, and device touch acceptance remain blocked. |
+| 84 | BLOCKED | User confirmed valid barcode lookup and the updated visible no-match feedback for an invalid barcode on Android. Remaining catalog search, refresh, empty-state, and network error/retry checks are not complete. |
+| 85 | BLOCKED | Expo Stock showed location-specific quantities and low-stock state, but the ₦48,000.00 vs ₦48,500.00 comparison came from an invalid directly seeded fixture with a stale variant average. A valid transaction-flow probe later showed ₦48,875.04 weighted-average valuation vs ₦48,500.00 remaining batch cost; the Stock screen was not retested with that fixture and accounting treatment remains unconfirmed (QA-015). |
+| 86 | PASS | Expo Web tests verified location switching, exact/unknown barcode behavior, quantity caps, and removal. User confirmed the corresponding Android QA basket/location checks passed without submitting checkout during this step. |
+| 87 | PASS | Earlier Expo Web card checkout created one invoice/payment and one stock deduction; user also confirmed a one-unit Android QA checkout succeeded, cleared the basket, and reduced QA Main stock once. Other payment methods and interrupted/uncertain retry remain unverified on device. |
+| 88 | PASS | Owner Expo Customers listed only the active in-business fixture; the inactive customer was absent, and the Staff API listing worked. User confirmed Android customer creation, name/email/phone searches, no-match behavior, hidden notes in the list, and Staff visibility. Pagination, API stop/restart, and network-error behavior remain unverified on device; no screenshot was saved. |
+| 89 | PASS | User confirmed on Android that Owner More modules opened, a disposable supplier/order lifecycle (create, place, partial/final receipt, cancellation) worked, and Staff More showed only permitted links. Prior Expo Web evidence is also recorded. No screenshot was saved; richer multi-line purchasing and remaining native checks are unverified. |
+| 90 | PASS | Browser network emulation queued and replayed one stock adjustment once. User confirmed the updated Android queue status appeared, the offline adjustment applied after Wi-Fi returned, and Step 90 passed. User earlier confirmed stock was restored to its original quantity. Native background/foreground lifecycle and conflict cases remain unverified; no screenshot was saved. |
+| 91 | PASS | A uniquely named product/variant created in the web catalog appeared in Expo Catalog after refresh with the same SKU and price. |
+| 92 | PASS | Expo checkout created one web-visible invoice/payment; web Sales History and Inventory reflected the sale, and the affected location decreased once. |
+| 93 | PASS | A unique-key offline stock adjustment replayed once, cleared from the queue, and web/API/mobile quantities and ledger entries matched. The separate weighted-average versus batch-cost question is tracked under QA-015 and does not indicate a sync/idempotency failure. |
 | 94 | PASS | Production checks passed with a strong temporary secret; automated auth/permission tests passed. |
-| 95 | BLOCKED | Repeated-login/rate-limit behavior was not executed. |
+| 95 | PASS | Twelve bounded invalid logins on the disposable account produced 401 responses followed by 429 throttles; valid login was still throttled during the window and succeeded after the 62-second wait. |
 | 96 | PASS | `config.production check --deploy` passed with a strong QA secret and isolated SQLite database. |
-| 97 | PASS | Django 65/65, mobile 6/6, and TypeScript checks passed. |
+| 97 | PASS | Rerun on 2026-11-08: Django 66/66; mobile Vitest 14/14; TypeScript, Django check, migration check, Android Expo export, and `git diff --check` passed. `adb devices -l` showed no connected device. |
 | 98 | BLOCKED | Full accessibility/performance/reliability smoke matrix was not completed. |
 | 99 | BLOCKED | Go-live/rollback rehearsal was not performed against a deployable staging target. |
-| 100 | BLOCKED | Final acceptance is blocked by the open browser permutations and all Android/device cases. |
+| 100 | BLOCKED | Final acceptance remains blocked by the QA-015 accounting-method decision, remaining web/role permutations, and all native Android/iOS device cases. |
+
+**Current totals:** 51 PASS, 0 FAIL, 49 BLOCKED, 0 NOT APPLICABLE. QA-015 remains an unresolved valuation/COGS policy question; QA-016 is resolved based on user-reported Android confirmation, while other native offline lifecycle/conflict checks remain open.

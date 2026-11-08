@@ -46,9 +46,10 @@ The Expo client uses a secure session store rather than AsyncStorage for auth se
 - Staff default permissions are restricted to operational business functions unless explicitly granted.
 - Owner access remains broad.
 - Refresh token invalidation is enforced on logout and rotation.
+- The mobile client serializes concurrent refresh attempts so only one rotated refresh token is issued for simultaneous expired-access requests. Logout validates the JWT user identifier regardless of whether the token library decodes it as a string or integer.
 
 ## Current limitations
 
 - The mobile auth and foreground queue lifecycle are implemented but have not yet received full physical-device verification on a real Android handset.
 - The permission system is centralized and ready for future custom roles, but it does not yet expose a user-configurable permission UI.
-- Mobile purchasing, customer management, and reporting remain incomplete. The POS now posts online checkout to the shared API; stock movement writes can queue locally for foreground retry. Expo physical-device verification remains pending.
+- Mobile customer listing and creation, Owner supplier/single-line purchase-order lifecycle, report summaries/expense capture, and online POS checkout are implemented against the shared API. Richer multi-line purchasing and background sync remain incomplete. Stock movement writes can queue locally for foreground retry. Expo physical-device verification remains pending.

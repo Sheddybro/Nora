@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { apiRequest } from './auth';
 
 export type ProductVariant = {
@@ -39,6 +40,10 @@ export type InventoryStock = {
 
 export type StockLocation = { id: number; name: string; is_active: boolean };
 
+export function normalizeLocationId(value: number | string): number {
+  return Number(value);
+}
+
 export type SaleReceipt = {
   id: number;
   invoice_number: string;
@@ -64,7 +69,15 @@ export async function fetchCategories(): Promise<Category[]> {
 
 export async function uploadProductImage(productId: number, uri: string, fileName: string, mimeType: string, altText: string): Promise<void> {
   const form = new FormData();
-  form.append('image', { uri, name: fileName, type: mimeType } as unknown as Blob);
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error(`Selected product image could not be read (${response.status}).`);
+    }
+    form.append('image', await response.blob(), fileName);
+  } else {
+    form.append('image', { uri, name: fileName, type: mimeType } as unknown as Blob);
+  }
   form.append('alt_text', altText);
   form.append('is_primary', 'true');
   await apiRequest(`/catalog/products/${productId}/images/`, { method: 'POST', body: form });

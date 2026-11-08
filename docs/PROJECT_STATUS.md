@@ -1,6 +1,6 @@
 # NorrisBeauty current project status
 
-Updated: 2026-11-06
+Updated: 2026-11-07
 
 ## Truthful summary
 
@@ -10,7 +10,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 
 - Django web application with business memberships, Owner/Staff permissions, session authentication, password reset, and versioned JWT API.
 - Catalog, inventory, purchasing, sales/POS, stock operations, customers, expenses, reports, audit events, and notifications in the shared backend.
-- Expo authentication using SecureStore, live catalog and inventory reads, online POS checkout, customer listing, Owner purchasing flows, and foreground-only stock queue replay.
+- Expo authentication using SecureStore, live catalog and inventory reads/writes, online POS checkout, customer listing/creation, Owner purchasing flows, report summaries/expense capture, and foreground-only stock queue replay.
 - Local SQLite development database and PostgreSQL-ready production configuration.
 
 ## Not complete or not accepted
@@ -18,7 +18,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - Physical Android/iOS device and E2E verification.
 - Full responsive screenshot/accessibility matrix and production staging rehearsal.
 - Background synchronization and camera barcode integration.
-- Customer creation UI and richer multi-line mobile purchasing.
+- Richer multi-line mobile purchasing.
 - Granular permission-management UI.
 - Full production deployment and backup/rollback verification.
 - Mobile dependency audit remediation; the current Expo dependency tree has documented advisories.
@@ -30,6 +30,8 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - `python manage.py makemigrations --check --dry-run`: PASS.
 - `python manage.py test`: PASS, 65 tests.
 - Latest QA execution: 40 PASS, 59 BLOCKED, 1 NOT APPLICABLE, 0 FAIL.
+- 2026-11-07 isolated Expo Web Owner/Staff feature smoke run: broad functional paths exercised; device acceptance remains blocked. See the Phase 9 report and QA final report.
+- Known inventory valuation reconciliation defect found during QA is tracked as QA-015; do not treat current valuation summaries as reconciled.
 
 ## Canonical evidence
 
