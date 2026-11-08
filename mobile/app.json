@@ -20,6 +20,13 @@
     },
     "android": {
       "package": "com.norrisbeauty.app"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "739365ab-2ff4-426f-9baa-826705901dfe"
+      }
+    },
+    "owner": "sheddybro"
   }
 }

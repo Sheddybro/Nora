@@ -163,6 +163,18 @@ Verification after the smoke test:
 - Obtain accounting approval for the valuation/COGS method and test sales, refunds, and reporting against it. Retest the Expo Stock screen using valid transaction-created data before deciding whether code changes are required.
 - Review the Expo dependency audit findings and router warnings separately.
 
+### 2026-11-08 login hero copy removal and private APK preparation
+
+- Removed the hero overlay text from the native Expo login image; preserved the background artwork, logo, and sign-in form.
+- Expo Web verification at a 390px CSS viewport confirmed the requested copy is absent, both logos and the form remain, and document width is exactly 390px.
+- Screenshot: [Expo login at 390px](./login-no-hero-copy-390.png). This is a viewport screenshot of the scrollable login page, not native-device acceptance.
+- `npx vitest run`: PASS — 17 tests across 5 files. `npx tsc --noEmit`: PASS. Android Expo export: PASS — 2.73 MB Hermes bundle.
+- The internal APK profile `privateDemo` was added with the demo HTTPS API URL; `eas config --platform android --profile privateDemo --json --non-interactive` resolved it successfully. Expo project linked as `@sheddybro/norrisbeauty`.
+- No APK has been produced. `eas build --local --platform android --profile privateDemo` failed because local EAS Android builds require macOS or Linux. The Windows Android SDK installation lacks platform/build tools and command-line tools, Java 11 is installed, and `adb devices -l` shows no connected device.
+- EAS cloud build was not submitted because it would upload repository source to Expo. Install a supported local Android toolchain to continue without a source upload.
+- After restarting the relevant local terminals, Django `/health/` and Expo Web both returned HTTP 200 at ports 8000 and 8081. The hosted PythonAnywhere health and login pages also loaded; the removed copy is absent there.
+- Native Android/iOS acceptance and production release remain blocked. The demo SQLite API must not receive real business records.
+
 ## Decision
 
 Backend/mobile regressions, TypeScript checking, and Android bundling pass. Expo Web Owner and Staff workflows received broad disposable-fixture smoke coverage, but Phase 9 remains **IN PROGRESS** until device/E2E and visual acceptance are completed and QA-015 is dispositioned.

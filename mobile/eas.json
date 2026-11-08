@@ -1,0 +1,13 @@
+{
+  "build": {
+    "privateDemo": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://norissbeautyquest.pythonanywhere.com/api/v1"
+      }
+    }
+  }
+}

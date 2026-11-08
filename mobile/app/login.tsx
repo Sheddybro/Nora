@@ -54,14 +54,9 @@ export default function MobileLoginScreen() {
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top', 'left', 'right']}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, width: '100%', paddingBottom: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <ImageBackground source={require('../assets/beauty-art.jpg')} resizeMode="cover" imageStyle={{ width: '100%', height: '100%' }} style={{ width: '100%', minHeight: 235, justifyContent: 'space-between', padding: 24, overflow: 'hidden' }}>
+        <ImageBackground source={require('../assets/beauty-art.jpg')} resizeMode="cover" imageStyle={{ width: '100%', height: '100%' }} style={{ width: '100%', minHeight: 235, justifyContent: 'flex-start', padding: 24, overflow: 'hidden' }}>
           <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(45, 28, 33, 0.48)' }} />
           <Image source={require('../assets/norris-logo.jpeg')} accessibilityLabel="Norris Beautyquest logo" resizeMode="contain" style={{ width: 106, height: 66, borderRadius: 8, backgroundColor: '#FFFFFF' }} />
-          <View style={{ gap: 5 }}>
-            <Text style={{ color: '#FFDADB', fontSize: 9, fontWeight: '700', letterSpacing: 1.6 }}>THE ART OF BEAUTIFUL BUSINESS</Text>
-            <Text style={{ color: '#FFFFFF', fontFamily: 'serif', fontSize: 28, lineHeight: 32, fontWeight: '600' }}>Beauty business,{"\n"}beautifully managed.</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 18 }}>Inventory, sales and insight in one elegant workspace.</Text>
-          </View>
         </ImageBackground>
         <View style={{ paddingHorizontal: 22, paddingTop: 28, gap: 10 }}>
           <Image source={require('../assets/norris-logo.jpeg')} accessibilityLabel="Norris Beautyquest logo" resizeMode="contain" style={{ width: 82, height: 54, borderRadius: 7, backgroundColor: '#FFFFFF' }} />
