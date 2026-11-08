@@ -1450,6 +1450,22 @@ html[data-bs-theme="dark"] .status-neutral {
   background: #7d4350;
 }
 
+.login-card .apk-download {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rose-deep);
+  color: var(--rose-deep);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-card .apk-download:hover {
+  background: #f6e9e9;
+  color: #7d4350;
+}
+
 .login-card .eyebrow {
   letter-spacing: 1.6px;
 }

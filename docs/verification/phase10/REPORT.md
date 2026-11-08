@@ -41,6 +41,14 @@ The deployment setup also passed local dependency installation, Django system ch
 - Screenshots: [1440px desktop](login-no-hero-copy-1440.png), [390px mobile](login-no-hero-copy-390.png). They document this copy change, not full responsive acceptance.
 - The source artwork at `static/img/beauty-art.jpg` contains separate embedded lettering that is not part of the removed HTML copy and remains unchanged.
 
+## Android APK download button (2026-11-08)
+
+- Added a separate **Download Android APK** link below Sign in. It opens the user-provided Google Drive URL in a new tab with `noopener noreferrer`; the existing login flow is unchanged.
+- Updated the Android/web tester guide to direct testers to the login-page button.
+- Verification: `.\.venv\Scripts\python.exe manage.py test core.tests.FoundationTests` — PASS, 19 tests; `.\.venv\Scripts\python.exe manage.py check` — PASS; `git diff --check` — PASS.
+- Local browser verification confirmed the button label, exact Drive URL, new-tab behavior, and link visibility at a 390px viewport. Screenshot captures are saved as `login-apk-download-1440.png` and `login-apk-download-390.png`.
+- This verification is local only; it does not claim the public PythonAnywhere deployment has been updated.
+
 ## Outstanding release gates
 
 - PostgreSQL staging is unavailable on the current free PythonAnywhere account. SQLite is not approved for real business records.
