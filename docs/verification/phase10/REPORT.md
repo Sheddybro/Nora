@@ -5,7 +5,7 @@
 ## Scope and environment
 
 - Host: `https://norissbeautyquest.pythonanywhere.com/`
-- Repository revision deployed: `e101424` (`Fix Django deployment dependencies`)
+- Repository revision deployed: `621d6ac` (`Remove login hero copy from image panel`)
 - Runtime: Python 3.12 with `/home/NorissBeautyquest/.virtualenvs/nora-venv`
 - Application directory: `/home/NorissBeautyquest/Nora`
 - Database: disposable SQLite at `/home/NorissBeautyquest/nora_demo.sqlite3`
@@ -29,8 +29,17 @@ No real business records may be entered in this SQLite demo.
 | `GET /api/v1/health/` | PASS, HTTP 200 and `{"status": "ok", "api_version": "v1"}` |
 | `GET /login/` and its deployed stylesheets | PASS; the branded login page and custom CSS rendered |
 | Local Django test suite before deployment | PASS, 66 tests |
+| Login hero-copy regression tests | PASS, 19 `FoundationTests`; includes assertion that the requested copy is absent |
 
 The deployment setup also passed local dependency installation, Django system checks, migration drift checks, and `check --deploy` before it was pushed.
+
+## Login image-panel copy update (2026-11-08)
+
+- Removed the requested HTML overlay copy from the image panel. The login form, logo, and background image remain.
+- Pulled commit `621d6ac` on PythonAnywhere with a fast-forward-only update, ran `collectstatic` successfully (`0` copied, `159` unchanged), and reloaded the web app.
+- Public `/login/` verification passed: all four requested strings are absent, the login form is present, and the background image URL resolves under `/static/`.
+- Screenshots: [1440px desktop](login-no-hero-copy-1440.png), [390px mobile](login-no-hero-copy-390.png). They document this copy change, not full responsive acceptance.
+- The source artwork at `static/img/beauty-art.jpg` contains separate embedded lettering that is not part of the removed HTML copy and remains unchanged.
 
 ## Outstanding release gates
 

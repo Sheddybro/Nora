@@ -33,6 +33,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - Latest QA execution: 40 PASS, 59 BLOCKED, 1 NOT APPLICABLE, 0 FAIL.
 - 2026-11-07 isolated Expo Web Owner/Staff feature smoke run: broad functional paths exercised; device acceptance remains blocked. See the Phase 9 report and QA final report.
 - 2026-11-08 PythonAnywhere SQLite demo deployment smoke-tested at `https://norissbeautyquest.pythonanywhere.com/`; production release remains blocked. See `docs/verification/phase10/REPORT.md`.
+- 2026-11-08 Login image-panel overlay copy removed and deployed at commit `621d6ac`; regression tests and public login smoke check passed.
 - Known inventory valuation reconciliation defect found during QA is tracked as QA-015; do not treat current valuation summaries as reconciled.
 
 ## Canonical evidence
