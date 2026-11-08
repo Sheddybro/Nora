@@ -1,6 +1,6 @@
 # NorrisBeauty current project status
 
-Updated: 2026-11-07
+Updated: 2026-11-08
 
 ## Truthful summary
 
@@ -21,6 +21,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - Richer multi-line mobile purchasing.
 - Granular permission-management UI.
 - Full production deployment and backup/rollback verification.
+- Private creation of the first Owner account for the temporary demo.
 - Mobile dependency audit remediation; the current Expo dependency tree has documented advisories.
 
 ## Verification baseline
@@ -31,6 +32,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - `python manage.py test`: PASS, 65 tests.
 - Latest QA execution: 40 PASS, 59 BLOCKED, 1 NOT APPLICABLE, 0 FAIL.
 - 2026-11-07 isolated Expo Web Owner/Staff feature smoke run: broad functional paths exercised; device acceptance remains blocked. See the Phase 9 report and QA final report.
+- 2026-11-08 PythonAnywhere SQLite demo deployment smoke-tested at `https://norissbeautyquest.pythonanywhere.com/`; production release remains blocked. See `docs/verification/phase10/REPORT.md`.
 - Known inventory valuation reconciliation defect found during QA is tracked as QA-015; do not treat current valuation summaries as reconciled.
 
 ## Canonical evidence

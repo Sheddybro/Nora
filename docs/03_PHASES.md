@@ -36,3 +36,7 @@ Phase 8 is complete for the approved scope. The implementation includes expense 
 ## Phase 9 status
 
 Phase 9 is implemented at code level but blocked for final acceptance. The implementation includes exact barcode lookup, live Expo catalog/inventory screens, stock-aware online POS checkout with server-enforced idempotency, business-scoped customer listing, owner supplier/purchase-order lifecycle actions, and foreground replay of locally queued stock movements. Physical-device/E2E verification, device screenshots, background sync, barcode hardware integration, and richer purchasing/customer UI remain pending. See `docs/verification/phase9/REPORT.md` and `docs/qa/execution/QA_FINAL_REPORT.md`.
+
+## Phase 10 status
+
+The PythonAnywhere site is deployed and smoke-tested as a temporary SQLite demo. This does not satisfy the production release criteria: PostgreSQL staging, verified backup/restore, rollback rehearsal, and private account provisioning remain outstanding. Do not store real business records in this demo. See `docs/verification/phase10/REPORT.md`.
