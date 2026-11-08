@@ -29,6 +29,11 @@ class FoundationTests(TestCase):
     self.assertContains(response,'/password-reset/')
     self.assertContains(response,'static/img/logo.jpeg')
     self.assertContains(response,'Norris Beautyquest')
+    self.assertContains(response,'login-art')
+    self.assertNotContains(response,'THE ART OF BEAUTIFUL BUSINESS')
+    self.assertNotContains(response,'Beauty business,')
+    self.assertNotContains(response,'beautifully managed.')
+    self.assertNotContains(response,'Inventory, sales and insight in one elegant workspace.')
  def test_health(self):
   r=self.client.get('/health/');self.assertEqual(r.status_code,200);self.assertEqual(r.json()['status'],'ok')
  def test_api_health(self):

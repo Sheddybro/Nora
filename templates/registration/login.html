@@ -1,3 +1,36 @@
-{% extends 'base.html' %}{% load static %}{% block title %}Sign in · NorrisBeauty{% endblock %}{% block body %}
-<main class="login-grid"><section class="login-art"><div class="brand-light"><img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="login-logo login-logo-dark"></div><div class="art-bottom"><p class="eyebrow">THE ART OF BEAUTIFUL BUSINESS</p><h1>Beauty business,<br>beautifully managed.</h1><p>Inventory, sales and insight in one elegant workspace.</p></div></section><section class="login-form-wrap"><div class="login-card"><div class="brand"><img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="login-logo"></div><p class="eyebrow mt-5">WELCOME BACK</p><h2>Sign in to your workspace</h2><p class="muted">Secure access for owners and staff.</p>{% if form.errors %}<div class="alert alert-danger" role="alert">Please check your username and password.</div>{% endif %}<form method="post">{% csrf_token %}<label for="id_username" class="form-label">Username</label><input class="form-control mb-3" id="id_username" name="username" required autofocus autocomplete="username"><label for="id_password" class="form-label">Password</label><input class="form-control mb-2" id="id_password" name="password" type="password" required autocomplete="current-password"><div class="login-help"><a href="{% url 'password_reset' %}">Forgot your password?</a></div><button class="btn btn-rose w-100" type="submit">Sign in →</button>{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}</form><p class="muted small mt-4">Accounts are provisioned by your business administrator.</p></div></section></main>
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sign in · NorrisBeauty{% endblock %}
+{% block body %}
+<main class="login-grid">
+  <section class="login-art">
+    <div class="brand-light">
+      <img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="login-logo login-logo-dark">
+    </div>
+  </section>
+  <section class="login-form-wrap">
+    <div class="login-card">
+      <div class="brand">
+        <img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="login-logo">
+      </div>
+      <p class="eyebrow mt-5">WELCOME BACK</p>
+      <h2>Sign in to your workspace</h2>
+      <p class="muted">Secure access for owners and staff.</p>
+      {% if form.errors %}
+        <div class="alert alert-danger" role="alert">Please check your username and password.</div>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <label for="id_username" class="form-label">Username</label>
+        <input class="form-control mb-3" id="id_username" name="username" required autofocus autocomplete="username">
+        <label for="id_password" class="form-label">Password</label>
+        <input class="form-control mb-2" id="id_password" name="password" type="password" required autocomplete="current-password">
+        <div class="login-help"><a href="{% url 'password_reset' %}">Forgot your password?</a></div>
+        <button class="btn btn-rose w-100" type="submit">Sign in →</button>
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      </form>
+      <p class="muted small mt-4">Accounts are provisioned by your business administrator.</p>
+    </div>
+  </section>
+</main>
 {% endblock %}

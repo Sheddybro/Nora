@@ -105,3 +105,10 @@ At the time of this report, the next action was to scan the LAN QR/link in Expo 
 - The mandated `images/` folder was not present. The existing official asset was identified and inspected at `static/img/logo.jpeg`; it contains the gold/black crowned Norris Beautyquest mark.
 - The original JPEG was reused unchanged in Django login/password recovery/workspace navigation and copied unchanged to `mobile/assets/norris-logo.jpeg` for Expo login, workspace screens, app icon, and splash configuration.
 - The JPEG has a white background, so transparent-logo behavior is not claimed.
+
+## Login background copy removal (2026-11-08)
+
+- Removed the login hero's HTML overlay copy while preserving its background image, logo, and sign-in form.
+- Regression check: `.\.venv\Scripts\python.exe manage.py test core.tests.FoundationTests.test_login_exposes_password_recovery` — PASS; confirms the requested copy is absent and login branding/recovery remain.
+- Captured screenshots: [desktop 1440px](../phase10/login-no-hero-copy-1440.png) and [mobile 390px](../phase10/login-no-hero-copy-390.png). They document this change only; they are not full responsive acceptance evidence.
+- The source background artwork itself contains separate embedded lettering; it was not edited as part of this exact-copy removal.
