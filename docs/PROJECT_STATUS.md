@@ -29,7 +29,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - Fresh local database recreated from migrations on 2026-11-06.
 - `python manage.py check`: PASS.
 - `python manage.py makemigrations --check --dry-run`: PASS.
-- `python manage.py test`: PASS, 65 tests.
+- `python manage.py test`: PASS, 66 tests.
 - Latest QA execution: 40 PASS, 59 BLOCKED, 1 NOT APPLICABLE, 0 FAIL.
 - 2026-11-07 isolated Expo Web Owner/Staff feature smoke run: broad functional paths exercised; device acceptance remains blocked. See the Phase 9 report and QA final report.
 - 2026-11-08 PythonAnywhere SQLite demo deployment smoke-tested at `https://norissbeautyquest.pythonanywhere.com/`; production release remains blocked. See `docs/verification/phase10/REPORT.md`.
