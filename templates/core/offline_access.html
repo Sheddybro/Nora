@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Offline access · NorrisBeauty{% endblock %}
+{% block body %}
+<main class="offline-page" id="main-content" tabindex="-1">
+  <section class="offline-card" data-offline-vault data-user-id="{{ user_id }}" data-business-id="{{ business_id }}">
+    <a class="brand offline-brand" href="{% url 'dashboard' %}"><img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="brand-logo"> Norris<span>Beauty</span></a>
+    <p class="eyebrow">DESKTOP APP · PRIVATE TO THIS DEVICE</p>
+    <h1>Offline catalog and stock</h1>
+    <p class="muted">Save a small, encrypted, read-only snapshot while online. POS, stock changes, and all other business actions still need a live connection.</p>
+
+    <div class="offline-scope notice">
+      <strong>What is saved</strong>
+      <p>Active product names, categories, SKUs and barcodes, plus stock quantities by location and reorder points. Prices, costs, customers, sales, reports, staff, suppliers, images, passwords, and API responses are not saved.</p>
+      <p>The snapshot expires after 24 hours, is locked after 5 minutes idle, and remains readable offline until it expires even if access is revoked while the device is disconnected.</p>
+    </div>
+
+    <div class="offline-fields">
+      <label for="offline-passphrase" class="form-label">Separate offline passphrase</label>
+      <input id="offline-passphrase" class="form-control" type="password" minlength="12" autocomplete="new-password" data-offline-passphrase aria-describedby="offline-passphrase-help">
+      <small id="offline-passphrase-help" class="muted">At least 12 characters. Do not reuse your website password. The passphrase and encryption key are not stored.</small>
+      <label for="offline-confirm" class="form-label">Confirm offline passphrase</label>
+      <input id="offline-confirm" class="form-control" type="password" minlength="12" autocomplete="new-password" data-offline-confirm>
+    </div>
+
+    <div class="offline-actions">
+      <button class="button-primary" type="button" data-offline-save>Save / refresh encrypted snapshot</button>
+      <button class="button-secondary" type="button" data-offline-unlock>Unlock saved snapshot</button>
+      <button class="button-secondary" type="button" id="pwaInstallButton" hidden>Install desktop app</button>
+      <a class="button-secondary" href="{% url 'dashboard' %}">Back to workspace</a>
+      <button class="button-danger" type="button" data-offline-delete>Delete offline snapshot</button>
+    </div>
+    <div class="offline-status notice" data-offline-status role="status" aria-live="polite" hidden></div>
+    <section class="offline-content" data-offline-content hidden aria-label="Read-only offline snapshot">
+      <p class="offline-warning">Read-only and possibly stale. Do not use this snapshot to make sale, payment, or stock decisions without reconnecting.</p>
+      <p class="muted" data-offline-metadata></p>
+      <label for="offline-search" class="form-label">Filter saved catalog and stock</label>
+      <input id="offline-search" class="form-control" type="search" data-offline-search placeholder="Product, SKU, barcode, or location">
+      <h2>Saved catalog</h2>
+      <ul class="offline-product-list" data-offline-products></ul>
+      <h2>Saved stock by location</h2>
+      <p class="muted offline-stock-help">Swipe sideways to view all stock columns.</p>
+      <div class="table-scroll"><table class="data-table offline-stock-table"><thead><tr><th>Product</th><th>SKU</th><th>Location</th><th>On hand</th><th>Reorder point</th></tr></thead><tbody data-offline-stock></tbody></table></div>
+      <button class="button-secondary" type="button" data-offline-lock>Lock offline data</button>
+    </section>
+  </section>
+</main>
+<span hidden data-offline-account-name>{{ request.user.get_username }}</span>
+<span hidden data-offline-business-name>{{ membership.business.name }}</span>
+{% endblock %}

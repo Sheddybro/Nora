@@ -7,6 +7,14 @@
 
 Thank you for helping test NorrisBeauty. Please focus on whether the app is understandable and reliable on your Android phone. The website is included so you can compare that the same business data appears in both places.
 
+## Optional desktop app and offline snapshot
+
+- Open the website in a supported desktop browser over HTTPS. Choose **Install desktop app** when offered, or use the browser's install option in the address bar/app menu. Some browsers show the install option only after the site meets their eligibility rules.
+- While online, an account with both catalog and inventory view access can open **Offline access** and create a snapshot using a separate passphrase of at least 12 characters. Do not reuse the website password or share the offline passphrase.
+- Only catalog names/SKUs/barcodes and stock quantities/reorder points are included. The snapshot is encrypted, read-only, expires after 24 hours, and locks after five minutes idle or when the app is hidden. Signing out deletes it.
+- If the device is offline, open the app/site to reach the offline shell and enter the offline passphrase. Saved information may be stale; revoked access cannot be detected until the next connection or expiry.
+- Sales, payments, stock changes, customer details, prices, costs, and other business actions are not available offline. Reconnect before acting on business data.
+
 ## Before you start
 
 - Ask the app owner for a **separate test username and password**. Do not put credentials in this document, screenshots, or chat messages.

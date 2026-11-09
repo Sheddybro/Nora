@@ -47,3 +47,4 @@ gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
 - Use PostgreSQL instead of SQLite for deployment.
 - Review secret, host, and cookie settings before every release.
 - Do not commit local `.env` values to version control.
+- For PWA releases, run `collectstatic` before reloading the app so versioned static assets and both manifest icons resolve. Verify `/manifest.webmanifest`, `/service-worker.js`, and `/offline-shell/` over HTTPS. The service worker caches static assets only; do not add authenticated routes or API paths to its precache.

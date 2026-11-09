@@ -40,3 +40,7 @@ Phase 9 is implemented at code level but blocked for final acceptance. The imple
 ## Phase 10 status
 
 The PythonAnywhere site is deployed and smoke-tested as a temporary SQLite demo. This does not satisfy the production release criteria: PostgreSQL staging, verified backup/restore, rollback rehearsal, and private account provisioning remain outstanding. Do not store real business records in this demo. See `docs/verification/phase10/REPORT.md`.
+
+## Phase 11 status
+
+The approved desktop PWA scope is implemented: standalone manifest, root-scoped service worker, static-only precache, offline fallback, and an encrypted, expiring, read-only catalog/stock snapshot. Focused Django tests and local desktop Chromium checks pass, including encryption-at-rest, offline unlock, expiry, auto-lock, and logout deletion. PythonAnywhere publication and live-host verification are tracked in `docs/verification/phase11/REPORT.md`; browser/OS-specific installation and native app behavior remain separate acceptance checks.

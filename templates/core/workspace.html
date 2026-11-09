@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}{% if page %}{{ page.title }}{% else %}{{ role|default:'Workspace'|title }} dashboard{% endif %} · NorrisBeauty{% endblock %}
 {% block body %}
-<div class="workspace" data-role="{{ role|default:'unassigned' }}" data-page="{{ active_page }}">
+<div class="workspace" data-role="{{ role|default:'unassigned' }}" data-page="{{ active_page }}" data-user-id="{{ request.user.pk }}" data-business-id="{{ membership.business_id|default:'' }}">
   <button class="sidebar-scrim" type="button" data-close-navigation aria-label="Close navigation"></button>
   <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
     <a class="brand brand-sidebar" href="{% url 'dashboard' %}" aria-label="NorrisBeauty overview"><img src="{% static 'img/logo.jpeg' %}" alt="Norris Beautyquest" class="brand-logo"> <span class="brand-wordmark">Norris<span>Beauty</span></span></a>
@@ -24,6 +24,8 @@
       <div class="topbar-context"><span class="topbar-kicker">NORRISBEAUTY</span><span class="topbar-divider">/</span><span>{% if page %}{{ page.title }}{% else %}Overview{% endif %}</span></div>
       <label class="search-shell"><span aria-hidden="true">⌕</span><input id="workspaceSearch" type="search" placeholder="Search this workspace" aria-label="Search visible records"><kbd>⌘ K</kbd></label>
       <div class="topbar-actions">
+        {% if membership and 'catalog.view' in permission_codes and 'inventory.view' in permission_codes %}<a class="button-secondary offline-access-link" href="{% url 'offline-access' %}">Offline access</a>{% endif %}
+        <button class="button-secondary pwa-install-button" id="pwaInstallButton" type="button" hidden>Install desktop app</button>
         <button class="icon-btn notification-btn" type="button" id="notificationsToggle" aria-label="Open notifications" aria-expanded="false"><span aria-hidden="true">♧</span><i data-unread-indicator hidden></i></button>
         <button class="icon-btn theme-btn" type="button" id="themeToggle" aria-label="Switch to dark mode" aria-pressed="false"><span aria-hidden="true">◐</span></button>
         <span class="topbar-separator"></span>

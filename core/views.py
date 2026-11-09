@@ -1,6 +1,8 @@
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import render
+from django.templatetags.static import static
+from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -82,6 +84,59 @@ def health(request):
 @permission_classes([AllowAny])
 def api_health(request):
 	return Response({'status': 'ok', 'api_version': 'v1'})
+
+
+@require_GET
+def pwa_manifest(request):
+	return JsonResponse({
+		'name': 'NorrisBeauty',
+		'short_name': 'NorrisBeauty',
+		'description': 'NorrisBeauty business workspace',
+		'id': '/',
+		'start_url': '/',
+		'scope': '/',
+		'display': 'standalone',
+		'orientation': 'any',
+		'background_color': '#FAF7F2',
+		'theme_color': '#FAF7F2',
+		'icons': [
+			{'src': static('img/pwa-icon-192.png'), 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
+			{'src': static('img/pwa-icon-512.png'), 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any'},
+		],
+	}, content_type='application/manifest+json')
+
+
+@require_GET
+def pwa_service_worker(request):
+	response = HttpResponse(
+		render_to_string('pwa/service-worker.js'),
+		content_type='application/javascript; charset=utf-8',
+	)
+	response['Service-Worker-Allowed'] = '/'
+	response['Cache-Control'] = 'no-cache'
+	return response
+
+
+@require_GET
+def pwa_offline_shell(request):
+	return render(request, 'pwa/offline_shell.html')
+
+
+@login_required
+def offline_access(request):
+	context = _workspace_context(request, 'offline')
+	membership = context['membership']
+	if (
+		not membership
+		or not membership_has_permission(membership, 'catalog.view')
+		or not membership_has_permission(membership, 'inventory.view')
+	):
+		return HttpResponseForbidden('Catalog and inventory access are required for an offline snapshot.')
+	context.update({
+		'user_id': request.user.pk,
+		'business_id': membership.business_id,
+	})
+	return render(request, 'core/offline_access.html', context)
 
 
 def _workspace_context(request, page_key='dashboard'):

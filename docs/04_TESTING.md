@@ -12,6 +12,15 @@
 9. Regression tests for inventory, payments and permissions.
 10. Record commit SHA, commands, results, screenshots, known limitations and approval in a verification report.
 
+## Desktop PWA checks
+
+- Run the focused Django PWA tests and `manage.py check`; verify the manifest icons resolve and the service worker controls the root scope.
+- In desktop Chromium, confirm the standalone manifest and install prompt behavior; do not claim a native desktop install from a synthetic prompt event.
+- Save a snapshot from live catalog/inventory API responses, confirm IndexedDB stores ciphertext only, and check that prices, costs, and API responses are absent from offline storage.
+- Disconnect the browser and navigate to another business page; it must show only the offline shell. Unlock with the separate passphrase, confirm read-only catalog/stock filtering, and verify lock, expiry, and logout deletion.
+- Inspect Cache Storage to confirm that static assets are cached and no `/api/` paths or authenticated pages are present. Capture desktop and narrow-screen screenshots.
+- The PWA requires a secure context (HTTPS or localhost). Offline access is limited to the last saved snapshot and cannot detect a membership revocation until reconnection or expiry.
+
 Commands above are targets once the project dependencies and test configuration are created; do not mark them passed in advance.
 
 ## Verification report template

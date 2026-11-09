@@ -6,6 +6,10 @@ from . import api_views
 urlpatterns=[
  path('',views.dashboard,name='dashboard'),
  path('health/',views.health,name='health'),
+ path('manifest.webmanifest',views.pwa_manifest,name='pwa-manifest'),
+ path('service-worker.js',views.pwa_service_worker,name='pwa-service-worker'),
+ path('offline-shell/',views.pwa_offline_shell,name='pwa-offline-shell'),
+ path('offline/',views.offline_access,name='offline-access'),
  path('api/v1/health/',views.api_health,name='api-health'),
  path('login/',auth_views.LoginView.as_view(template_name='registration/login.html'),name='login'),
  path('logout/',auth_views.LogoutView.as_view(),name='logout'),

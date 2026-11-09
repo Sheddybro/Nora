@@ -1,0 +1,46 @@
+{% load static %}
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf7f2">
+  <link rel="manifest" href="{% url 'pwa-manifest' %}">
+  <link rel="stylesheet" href="{% static 'css/norris.css' %}">
+  <link rel="stylesheet" href="{% static 'css/phase2.css' %}">
+  <title>Offline workspace · NorrisBeauty</title>
+  <script defer src="{% static 'js/offline-vault.js' %}"></script>
+  <script defer src="{% static 'js/pwa.js' %}"></script>
+</head>
+<body>
+  <main class="offline-page" id="main-content" tabindex="-1">
+    <section class="offline-card offline-shell-card" data-offline-vault>
+      <img src="{% static 'img/pwa-icon-192.png' %}" alt="" class="offline-app-icon">
+      <p class="eyebrow">NORRISBEAUTY DESKTOP</p>
+      <h1>Offline workspace</h1>
+      <p class="muted">You are offline. Unlock the encrypted read-only catalog and stock snapshot saved on this browser profile.</p>
+      <p class="offline-warning">Offline information can be stale. Changes, sales, and payments are not available here. Access revoked while offline cannot be detected until the next connection.</p>
+      <label for="offline-passphrase" class="form-label">Offline passphrase</label>
+      <input id="offline-passphrase" class="form-control" type="password" autocomplete="current-password" data-offline-passphrase>
+      <div class="offline-actions">
+        <button class="button-primary" type="button" data-offline-unlock>Unlock offline snapshot</button>
+        <button class="button-secondary pwa-install-button" id="pwaInstallButton" type="button" hidden>Install desktop app</button>
+        <a class="button-secondary" href="/login/">Sign in when online</a>
+        <button class="button-danger" type="button" data-offline-delete>Delete offline snapshot</button>
+      </div>
+      <div class="offline-status notice" data-offline-status role="status" aria-live="polite" hidden></div>
+      <section class="offline-content" data-offline-content hidden aria-label="Read-only offline snapshot">
+        <p class="muted" data-offline-metadata></p>
+        <label for="offline-search" class="form-label">Filter saved catalog and stock</label>
+        <input id="offline-search" class="form-control" type="search" data-offline-search placeholder="Product, SKU, barcode, or location">
+        <h2>Saved catalog</h2>
+        <ul class="offline-product-list" data-offline-products></ul>
+        <h2>Saved stock by location</h2>
+        <p class="muted offline-stock-help">Swipe sideways to view all stock columns.</p>
+        <div class="table-scroll"><table class="data-table offline-stock-table"><thead><tr><th>Product</th><th>SKU</th><th>Location</th><th>On hand</th><th>Reorder point</th></tr></thead><tbody data-offline-stock></tbody></table></div>
+        <button class="button-secondary" type="button" data-offline-lock>Lock offline data</button>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

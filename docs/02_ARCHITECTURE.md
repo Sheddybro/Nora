@@ -18,6 +18,7 @@ backend/config, backend/apps/{accounts,organizations,catalog,inventory,purchasin
 - POS checkout remains online-only. Checkout idempotency keys are persisted server-side and exact retries return the original sale; reusing a key with a different payload is rejected.
 - Catalog and inventory reads/writes use `/api/v1/` for both browser sessions (CSRF-protected) and mobile JWTs. Derive business scope from the server-validated membership; never accept a client business ID as authority.
 - Inventory cost is weighted-average per variant. Batch quantity and immutable stock movement records are updated atomically; negative batch balances are rejected. Revisit the cost method only with an approved migration and reconciliation plan.
+- The web client can be installed as a desktop PWA. Its root-scoped service worker caches only the offline shell and same-origin static assets; it never caches authenticated pages or API responses. The optional offline snapshot is produced from the shared versioned catalog/inventory API and is encrypted in IndexedDB; offline business writes are not supported.
 
 ## Data model candidates
 Business, Membership, User, Product, ProductVariant, Category, ProductImage, StockLocation, Batch, StockMovement, InventoryBalance, Supplier, PurchaseOrder, PurchaseLine, Customer, Sale, SaleLine, Payment, Refund, Transfer, Adjustment, Expense, AuditEvent, Notification.

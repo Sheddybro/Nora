@@ -1,6 +1,6 @@
 # NorrisBeauty current project status
 
-Updated: 2026-11-08
+Updated: 2026-11-09
 
 ## Truthful summary
 
@@ -11,6 +11,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - Django web application with business memberships, Owner/Staff permissions, session authentication, password reset, and versioned JWT API.
 - Catalog, inventory, purchasing, sales/POS, stock operations, customers, expenses, reports, audit events, and notifications in the shared backend.
 - Expo authentication using SecureStore, live catalog and inventory reads/writes, online POS checkout, customer listing/creation, Owner purchasing flows, report summaries/expense capture, and foreground-only stock queue replay.
+- Desktop PWA installability and an encrypted, read-only offline catalog/stock snapshot verified in local desktop Chromium. Published-host validation remains pending; full production readiness remains blocked.
 - Local SQLite development database and PostgreSQL-ready production configuration.
 
 ## Not complete or not accepted
@@ -35,6 +36,7 @@ NorrisBeauty is a working Django/DRF and Expo implementation with automated back
 - 2026-11-08 PythonAnywhere SQLite demo deployment smoke-tested at `https://norissbeautyquest.pythonanywhere.com/`; production release remains blocked. See `docs/verification/phase10/REPORT.md`.
 - 2026-11-08 Login image-panel overlay copy removed and deployed at commit `621d6ac`; regression tests and public login smoke check passed.
 - 2026-11-08 Native Expo login hero copy removed; private Android APK profile prepared and Expo Web verified. A tester-supplied APK is present locally, but its source revision/build profile has not been independently verified. See `docs/verification/phase9/REPORT.md`.
+- 2026-11-09 Phase 11 desktop PWA: full Django test suite passed (70 tests), static JavaScript syntax checks passed, and local desktop Chromium verified standalone manifest/icons, service-worker scope/static-only caching, install prompt behavior, encrypted snapshot storage, wrong-passphrase rejection, offline shell, responsive 390px layout, expiry, auto-lock, and logout deletion. Screenshots and evidence are recorded in `docs/verification/phase11/REPORT.md`. PythonAnywhere deployment/live-host validation and operating-system install acceptance are tracked separately.
 - Known inventory valuation reconciliation defect found during QA is tracked as QA-015; do not treat current valuation summaries as reconciled.
 
 ## Canonical evidence

@@ -14,10 +14,15 @@
 - Phases 5–8 backend workflows: suppliers and purchase orders, atomic sales checkout/refunds, transfers/stocktakes/alerts, expenses/reports/audit events/notifications, all exposed through the shared versioned API and covered by Django regression tests.
 - Phase 9 mobile progress: live barcode-aware catalog and stock screens, stock-aware mobile POS checkout with server-enforced idempotency, business-scoped customer listing/creation, owner supplier/purchase-order lifecycle flows with idempotent create/receive, and a business/user-scoped local stock-movement queue that retries on app start, connectivity restoration, and foregrounding.
 - Expo React Native client with secure credential/session storage via Expo SecureStore and a real auth context that consumes the shared Django backend.
+- Installable desktop PWA shell with a same-origin service worker. While online, authorized users can save a 24-hour, passphrase-protected encrypted catalog/stock snapshot for read-only access while offline. Business pages, API responses, prices, costs, and write actions are not cached or available offline.
 - 15 reference crops + full visual collage; design system; acceptance matrix and prompts.
 
 ## What's not implemented
-Full production tenant provisioning, granular permission configuration UI, background sync, multi-line purchasing order editing, and physical-device verification of Expo workflows. Customer creation is available in the mobile Customers screen. The mobile stock queue syncs only while the app is running and authenticated; POS sales remain online-only because queued checkout has not received device/E2E validation. Some dashboard and finance screens remain demo-only.
+Full production tenant provisioning, granular permission configuration UI, background sync, multi-line purchasing order editing, OS/browser-specific PWA installation acceptance, and physical-device verification of Expo workflows. Customer creation is available in the mobile Customers screen. The mobile stock queue syncs only while the app is running and authenticated; POS sales remain online-only because queued checkout has not received device/E2E validation. Some dashboard and finance screens remain demo-only.
+
+### Install NorrisBeauty on desktop
+
+Open the HTTPS website in a PWA-capable desktop browser and choose **Install desktop app** when the browser offers the install prompt. If the in-page button is not offered yet, use the browser's install option in its address bar or app menu. The offline shell contains only the encrypted catalog/stock snapshot; reconnect for sales, payments, stock changes, and all other business actions. A saved snapshot can remain available until its 24-hour expiry if access is revoked while the device is offline. See `docs/07_DATA_AND_SECURITY.md` for the data boundary and limitations.
 
 ## Visual samples
 `design/references/` contains generated inspiration images. Some cropped collage samples are low-resolution and small text is illustrative only. `design/references/00_full_design_board.png` is the source image. Rebuild with real UI components.
