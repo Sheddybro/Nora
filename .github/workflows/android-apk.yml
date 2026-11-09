@@ -1,0 +1,109 @@
+name: Build and publish verified Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - "mobile/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: norrisbeauty-android-apk
+  cancel-in-progress: false
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run mobile regression tests
+        run: npm test
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Confirm authenticated Expo account
+        run: eas whoami --non-interactive
+
+      - name: Build signed Android APK in Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CI: "1"
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile privateDemo --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
+          node - "$RUNNER_TEMP/eas-build.json" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const raw = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const build = Array.isArray(raw) ? raw[0] : raw;
+          if (!build || typeof build !== 'object') throw Error('Expo did not return build metadata');
+          const status = String(build.status || '').toLowerCase();
+          if (!['finished', 'success', 'succeeded'].includes(status)) throw Error('Expo build did not finish successfully: ' + status);
+          const url = build.artifacts?.buildUrl || build.artifacts?.applicationArchiveUrl || build.artifactUrl;
+          if (!url || !/^https:\/\//i.test(url)) throw Error('Expo did not provide an HTTPS APK artifact URL');
+          if (!build.id) throw Error('Expo did not provide a build ID');
+          fs.appendFileSync(process.argv[3], 'apk_url=' + url + '\nexpo_build_id=' + build.id + '\n');
+          NODE
+        id: expo_build
+
+      - name: Download and validate APK archive
+        env:
+          APK_URL: ${{ steps.expo_build.outputs.apk_url }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --retry-all-errors --output "$RUNNER_TEMP/NorrisBeauty.apk" "$APK_URL"
+          python - "$RUNNER_TEMP/NorrisBeauty.apk" <<'PY'
+          import sys, zipfile, pathlib
+          apk = pathlib.Path(sys.argv[1])
+          assert apk.stat().st_size > 1_000_000, 'APK is unexpectedly small'
+          with zipfile.ZipFile(apk) as archive:
+              assert archive.testzip() is None, 'APK archive is corrupt'
+              assert 'AndroidManifest.xml' in archive.namelist(), 'Missing AndroidManifest.xml'
+          print('Verified APK ZIP integrity, Android manifest, and size:', apk.stat().st_size)
+          PY
+          sha256sum "$RUNNER_TEMP/NorrisBeauty.apk" | tee "$RUNNER_TEMP/NorrisBeauty.apk.sha256"
+
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPO_BUILD_ID: ${{ steps.expo_build.outputs.expo_build_id }}
+        run: |
+          set -euo pipefail
+          TAG="android-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$TAG" "$RUNNER_TEMP/NorrisBeauty.apk#NorrisBeauty.apk" "$RUNNER_TEMP/NorrisBeauty.apk.sha256#NorrisBeauty.apk.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "NorrisBeauty Android APK $TAG" \
+            --notes "Signed APK built by Expo EAS (privateDemo). Source: $GITHUB_SHA. Expo build: $EXPO_BUILD_ID. SHA256 included." \
+            --latest
+          echo "Published signed APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/NorrisBeauty.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "Stable latest-release URL: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/NorrisBeauty.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Expo build ID: $EXPO_BUILD_ID" >> "$GITHUB_STEP_SUMMARY"
