@@ -1,5 +1,5 @@
 {% load static %}
-const CACHE_NAME = 'norrisbeauty-desktop-v1';
+const CACHE_NAME = 'norrisbeauty-desktop-v2';
 const OFFLINE_SHELL = '/offline-shell/';
 const PRECACHE_URLS = [
   OFFLINE_SHELL,

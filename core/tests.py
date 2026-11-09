@@ -31,6 +31,10 @@ class FoundationTests(TestCase):
     self.assertContains(response,'Install desktop app')
     self.assertContains(response,'https://drive.google.com/file/d/1lelNKdI5jPqGKzVvoLZc2HkiPUCiFlch/view?usp=sharing')
     self.assertContains(response,'Download Android APK')
+    self.assertContains(response,'Install on iPhone or iPad')
+    self.assertContains(response,'Add to Home Screen')
+    self.assertContains(response,'apple-touch-icon')
+    self.assertContains(response,'viewport-fit=cover')
     self.assertContains(response,'target="_blank" rel="noopener noreferrer"')
     self.assertContains(response,'static/img/logo.jpeg')
     self.assertContains(response,'Norris Beautyquest')
@@ -53,6 +57,7 @@ class FoundationTests(TestCase):
     self.assertEqual(response['Service-Worker-Allowed'],'/')
     self.assertIn("request.mode === 'navigate'",response.content.decode())
     self.assertIn("'/offline-shell/'",response.content.decode())
+    self.assertIn('norrisbeauty-desktop-v2',response.content.decode())
  def test_offline_shell_is_public_and_contains_no_business_snapshot(self):
     response=self.client.get('/offline-shell/')
     self.assertEqual(response.status_code,200)

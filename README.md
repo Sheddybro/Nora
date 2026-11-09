@@ -24,6 +24,15 @@ Full production tenant provisioning, granular permission configuration UI, backg
 
 Open the HTTPS website in a PWA-capable desktop browser and choose **Install desktop app** when the browser offers the install prompt. If the in-page button is not offered yet, use the browser's install option in its address bar or app menu. The offline shell contains only the encrypted catalog/stock snapshot; reconnect for sales, payments, stock changes, and all other business actions. A saved snapshot can remain available until its 24-hour expiry if access is revoked while the device is offline. See `docs/07_DATA_AND_SECURITY.md` for the data boundary and limitations.
 
+### Install NorrisBeauty on iPhone or iPad (free)
+
+1. Open the HTTPS NorrisBeauty website in **Safari** on the device.
+2. On the sign-in page, expand **Install on iPhone or iPad — free** for the current instructions.
+3. In Safari's Share menu, choose **Add to Home Screen**. Enable **Open as Web App** if your iOS version offers it, then tap **Add**.
+4. Launch the new NorrisBeauty icon from the Home Screen and sign in.
+
+This Home Screen web app does **not** require an Apple Developer account or App Store listing. It uses the same Django web backend and permissions as the desktop website, not the Expo-native iOS build. Online access is still required for sales, payments, stock mutations, and other writes. The existing encrypted 24-hour catalog/stock snapshot is read-only; offline write/sync features have not been implemented for the iOS web app. Safari and iOS-version-specific behavior must be verified on a physical iPhone/iPad before claiming full acceptance.
+
 ## Visual samples
 `design/references/` contains generated inspiration images. Some cropped collage samples are low-resolution and small text is illustrative only. `design/references/00_full_design_board.png` is the source image. Rebuild with real UI components.
 
