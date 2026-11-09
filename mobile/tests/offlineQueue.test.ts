@@ -137,6 +137,58 @@ describe('offline stock movement queue', () => {
     expect(apiRequestMock).toHaveBeenCalledTimes(1);
   });
 
+  it('replays dependent stock movements in the order they were queued', async () => {
+    const receipt = await stockMovement();
+    const adjustment = await queueOfflineMutation({
+      userId: session.user.id,
+      businessId: session.business.id,
+      resource: '/inventory/movements/',
+      method: 'POST',
+      payload: { kind: 'adjustment', quantity_delta: -1 },
+      idempotencyKey: 'adjustment-after-receipt',
+    });
+    const listed = await getQueuedMutations(session.user.id, session.business.id);
+    expect(listed.map((item) => item.id)).toEqual([adjustment.id, receipt.id]);
+
+    apiRequestMock.mockResolvedValue({});
+    await syncQueuedMutations(session);
+
+    expect(apiRequestMock.mock.calls.map(([resource, options]) => ({
+      resource,
+      key: JSON.parse(options.body).idempotency_key,
+    }))).toEqual([
+      { resource: '/inventory/movements/', key: 'stock-7-11' },
+      { resource: '/inventory/movements/', key: 'adjustment-after-receipt' },
+    ]);
+    expect(await getQueuedMutations(session.user.id, session.business.id)).toEqual([]);
+  });
+
+  it('does not overtake an earlier transient failure with a later stock change', async () => {
+    const receipt = await stockMovement();
+    const adjustment = await queueOfflineMutation({
+      userId: session.user.id,
+      businessId: session.business.id,
+      resource: '/inventory/movements/',
+      method: 'POST',
+      payload: { kind: 'adjustment', quantity_delta: -1 },
+      idempotencyKey: 'adjustment-after-failed-receipt',
+    });
+    apiRequestMock.mockRejectedValueOnce(Object.assign(new Error('Network error'), { status: 503 }));
+
+    await syncQueuedMutations(session);
+
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(apiRequestMock.mock.calls[0][1].body).idempotency_key).toBe('stock-7-11');
+    const pending = await getQueuedMutations(session.user.id, session.business.id);
+    expect(pending.map((item) => item.id)).toEqual([adjustment.id, receipt.id]);
+    expect(pending.every((item) => item.status === 'queued')).toBe(true);
+
+    apiRequestMock.mockResolvedValue({});
+    await syncQueuedMutations(session);
+    expect(apiRequestMock).toHaveBeenCalledTimes(3);
+    expect(await getQueuedMutations(session.user.id, session.business.id)).toEqual([]);
+  });
+
   it('preserves unreadable persisted data and reports a clear error', async () => {
     storage.set(queueKey, '{invalid json');
 
