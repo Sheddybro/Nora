@@ -156,7 +156,9 @@ export async function syncQueuedMutations(session: AuthSession): Promise<void> {
   syncInProgress = true;
   try {
     const queue = await getQueuedMutations(session.user.id, session.business.id);
-    for (const mutation of queue) {
+    // The UI stores newest changes first, but server writes must replay oldest first.
+    // Otherwise an offline receipt followed by an adjustment could be reversed.
+    for (const mutation of [...queue].reverse()) {
       if (mutation.status === 'conflict') {
         continue;
       }
