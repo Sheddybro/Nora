@@ -26,10 +26,17 @@
     <div class="offline-actions">
       <button class="button-primary" type="button" data-offline-save>Save / refresh encrypted snapshot</button>
       <button class="button-secondary" type="button" data-offline-unlock>Unlock saved snapshot</button>
-      <button class="button-secondary" type="button" id="pwaInstallButton" hidden>Install desktop app</button>
+      <button class="button-secondary pwa-install-button" type="button" id="pwaInstallButton" hidden>Install desktop app</button>
       <a class="button-secondary" href="{% url 'dashboard' %}">Back to workspace</a>
       <button class="button-danger" type="button" data-offline-delete>Delete offline snapshot</button>
     </div>
+    <section class="desktop-install" data-desktop-install hidden aria-label="Install NorrisBeauty on a computer">
+      <button class="button-secondary desktop-install-toggle" type="button" data-desktop-install-toggle aria-expanded="false" aria-controls="desktop-install-steps-offline">How to install on Windows or desktop</button>
+      <div class="desktop-install-steps" id="desktop-install-steps-offline" hidden>
+        <p>In Chrome or Microsoft Edge, open the browser menu and select <strong>Install NorrisBeauty</strong> or <strong>Apps → Install this site as an app</strong>, if available.</p>
+        <p>Launch the app from the Windows Start menu. While online, save an encrypted snapshot here to read catalog and stock offline. Sales and stock updates require internet.</p>
+      </div>
+    </section>
     <div class="offline-status notice" data-offline-status role="status" aria-live="polite" hidden></div>
     <section class="offline-content" data-offline-content hidden aria-label="Read-only offline snapshot">
       <p class="offline-warning">Read-only and possibly stale. Do not use this snapshot to make sale, payment, or stock decisions without reconnecting.</p>
