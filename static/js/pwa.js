@@ -8,6 +8,26 @@
   const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches
     || window.navigator.standalone === true;
 
+  const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /Safari/.test(navigator.userAgent)
+    && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+  const iosGuide = document.querySelector('[data-ios-install]');
+  const iosToggle = document.querySelector('[data-ios-install-toggle]');
+  const iosSteps = document.getElementById('ios-install-steps');
+  if (iosGuide && isAppleMobile && !isInstalled()) {
+    iosGuide.hidden = false;
+    if (!isSafari) {
+      const message = iosGuide.querySelector('[data-ios-safari-message]');
+      if (message) message.textContent = 'Open this website in Safari, then follow these steps:';
+    }
+    iosToggle?.addEventListener('click', () => {
+      const expanded = iosToggle.getAttribute('aria-expanded') !== 'true';
+      iosToggle.setAttribute('aria-expanded', String(expanded));
+      if (iosSteps) iosSteps.hidden = !expanded;
+    });
+  }
+
   setInstallButtonVisibility(false);
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
