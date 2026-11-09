@@ -85,6 +85,7 @@ class FoundationTests(TestCase):
   response=self.client.get('/')
   self.assertEqual(response.status_code,200)
   self.assertContains(response,'OWNER DASHBOARD')
+  self.assertContains(response,'Add a product')
   self.assertContains(response,'Skip to main content')
   self.assertContains(response,'id="main-content"')
   self.assertContains(response,'static/img/logo.jpeg')
@@ -93,7 +94,11 @@ class FoundationTests(TestCase):
   business=Business.objects.create(name='NorrisBeauty')
   Membership.objects.create(user=user,business=business,role=Membership.STAFF)
   self.client.force_login(user)
-  self.assertContains(self.client.get('/'),'STAFF DASHBOARD')
+  response=self.client.get('/')
+  self.assertContains(response,'STAFF DASHBOARD')
+  self.assertContains(response,'Browse products')
+  self.assertContains(response,'View the product catalog')
+  self.assertNotContains(response,'<strong>Add a product</strong>',html=False)
  def test_owner_and_staff_members_cannot_access_django_admin(self):
     business=Business.objects.create(name='NorrisBeauty')
     for role in (Membership.OWNER,Membership.STAFF):

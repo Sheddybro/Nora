@@ -149,17 +149,24 @@
     tableBody.append(row);
   };
   const statusFilter = document.querySelector('[data-status-filter]');
+  let tableTotalCount = 0;
   const updateCount = (count) => {
+    tableTotalCount = count;
     const target = document.querySelector('[data-table-count]');
     if (target) target.textContent = `${count} ${count === 1 ? 'record' : 'records'}`;
   };
   const applyTableSearch = () => {
     const query = document.querySelector('[data-table-search]')?.value.trim().toLowerCase() || '';
     const selectedStatus = statusFilter?.value || '';
+    let visibleCount = 0;
     tableBody?.querySelectorAll('tr:not(.empty-table-row)').forEach((row) => {
       row.hidden = !row.textContent.toLowerCase().includes(query)
         || Boolean(selectedStatus && !row.textContent.toLowerCase().includes(selectedStatus.toLowerCase()));
+      if (!row.hidden) visibleCount += 1;
     });
+    const count = query || selectedStatus ? visibleCount : tableTotalCount;
+    const target = document.querySelector('[data-table-count]');
+    if (target) target.textContent = `${count} ${count === 1 ? 'record' : 'records'}`;
   };
 
   const setTheme = (theme) => {
@@ -914,17 +921,19 @@
   });
 
   const initDashboard = async () => {
-    const period = document.querySelector('[data-dashboard-period].active')?.dataset.dashboardPeriod || 'month';
-    const summary = await api(`/reports/summary/?period=${period}`);
-    const format = (key, value) => key === 'sales_total' || key === 'average_order' ? money(value) : Number(value).toLocaleString('en-NG');
-    document.querySelectorAll('[data-dashboard-value]').forEach((node) => {
-      const key = node.dataset.dashboardValue;
-      node.textContent = format(key, summary[key]);
-    });
-    document.querySelectorAll('[data-dashboard-note="sales_total"]').forEach((node) => { node.textContent = `${dateOnly(summary.start_date)} – ${dateOnly(summary.end_date)}`; });
-    document.querySelector('[data-dashboard-chart-total]').textContent = money(summary.sales_total);
-    document.querySelector('[data-dashboard-dates]').textContent = `${dateOnly(summary.start_date)} – ${dateOnly(summary.end_date)}`;
-    drawChart(document.querySelector('[data-dashboard-chart]'), summary.chart);
+    if (isOwner) {
+      const period = document.querySelector('[data-dashboard-period].active')?.dataset.dashboardPeriod || 'month';
+      const summary = await api(`/reports/summary/?period=${period}`);
+      const format = (key, value) => key === 'sales_total' || key === 'average_order' ? money(value) : Number(value).toLocaleString('en-NG');
+      document.querySelectorAll('[data-dashboard-value]').forEach((node) => {
+        const key = node.dataset.dashboardValue;
+        node.textContent = format(key, summary[key]);
+      });
+      document.querySelectorAll('[data-dashboard-note="sales_total"]').forEach((node) => { node.textContent = `${dateOnly(summary.start_date)} – ${dateOnly(summary.end_date)}`; });
+      document.querySelector('[data-dashboard-chart-total]').textContent = money(summary.sales_total);
+      document.querySelector('[data-dashboard-dates]').textContent = `${dateOnly(summary.start_date)} – ${dateOnly(summary.end_date)}`;
+      drawChart(document.querySelector('[data-dashboard-chart]'), summary.chart);
+    }
     const [sales, stock] = await Promise.all([api('/sales/'), api('/inventory/stock/')]);
     let activeAlerts = [];
     let openOrders = [];
