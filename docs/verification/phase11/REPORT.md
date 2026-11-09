@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implementation and local browser verification: PASS. Published-host and native install acceptance: PENDING.** This report distinguishes local evidence from deployment evidence; no live-host claim is made until PythonAnywhere is updated and checked.
+**Implementation, local browser verification, and PythonAnywhere deployment smoke checks: PASS. Native/OS-specific installation acceptance remains PENDING.** This report distinguishes automated and local browser evidence from live-host smoke checks.
 
 ## Scope
 
@@ -47,6 +47,22 @@ Screenshots:
 - [Offline desktop 1440px](./offline-shell-1440.png)
 - [Offline narrow screen 390px](./offline-shell-390.png)
 
+## PythonAnywhere deployment verification
+
+Deployment completed 2026-11-09 from GitHub commit `d6c6faa` (`Add desktop PWA with encrypted offline snapshot`) to the existing PythonAnywhere SQLite demo at `https://norissbeautyquest.pythonanywhere.com/`.
+
+The first live smoke check found HTTP 500 responses because the production static-files manifest did not contain `js/offline-vault.js`. PythonAnywhere Bash then ran `collectstatic` with production settings and the secret loaded only into the command environment. The command completed successfully: `0 static files copied, 163 unmodified, 722 post-processed`. Following the app reload, the live endpoints recovered.
+
+| Live check | Result |
+|---|---|
+| `/health/` and `/` | PASS — HTTP 200. |
+| `/login/` | PASS — HTTP 200; install button and APK download link are present. |
+| `/manifest.webmanifest` | PASS — HTTP 200, standalone display, root start URL/scope; both versioned PNG icons return HTTP 200. |
+| `/service-worker.js` | PASS — HTTP 200 and `Service-Worker-Allowed: /`; all six versioned same-origin static precache URLs return HTTP 200; no API path is cached. |
+| `/offline-shell/` | PASS — HTTP 200. |
+
+The PythonAnywhere deployment was smoke-checked through HTTP requests. An authenticated user account was not used for a live snapshot creation, and no browser OS-level installation or live-host offline restart was independently verified.
+
 ## Limitations and security notes
 
 - Offline data may be stale. Membership revocation cannot be detected while disconnected; a snapshot remains usable until its 24-hour expiry if the user knows the passphrase.
@@ -54,8 +70,8 @@ Screenshots:
 - The snapshot is available only in the same browser profile/device where it was created and requires a secure context (HTTPS or localhost) and Web Crypto/IndexedDB support.
 - POS, payments, stock changes, authenticated business pages, and all other writes require a live connection.
 - Browser install prompts and installed-app behavior vary by browser and OS. No actual OS installation or physical desktop offline restart was established by this local browser run.
-- PythonAnywhere deployment, HTTPS live-host worker behavior, static collection, public smoke checks, and reload remain pending until deployment is performed.
+- The app uses the temporary SQLite demo and remains unsuitable for real business records. PostgreSQL staging, backup/restore and rollback rehearsal, and private account provisioning remain outstanding per the Phase 10 release gates.
 
 ## Decision
 
-**Local implementation verification: PASS. Release/deployment acceptance: BLOCKED pending PythonAnywhere deployment and public-host checks.** Production readiness is not implied; the SQLite demo remains unsuitable for real business records.
+**Phase 11 implementation and deployment smoke checks: PASS. Native/OS-specific install acceptance: PENDING.** Production readiness is not implied; the SQLite demo remains unsuitable for real business records.
