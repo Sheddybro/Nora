@@ -57,7 +57,7 @@ class FoundationTests(TestCase):
     self.assertEqual(response['Service-Worker-Allowed'],'/')
     self.assertIn("request.mode === 'navigate'",response.content.decode())
     self.assertIn("'/offline-shell/'",response.content.decode())
-    self.assertIn('norrisbeauty-desktop-v2',response.content.decode())
+    self.assertIn('norrisbeauty-desktop-v3',response.content.decode())
  def test_offline_shell_is_public_and_contains_no_business_snapshot(self):
     response=self.client.get('/offline-shell/')
     self.assertEqual(response.status_code,200)
@@ -76,6 +76,8 @@ class FoundationTests(TestCase):
     self.assertEqual(response.status_code,200)
     self.assertContains(response,'Offline catalog and stock')
     self.assertContains(response,'data-user-id="')
+    self.assertContains(response,'class="button-secondary pwa-install-button"')
+    self.assertContains(response,'data-desktop-install-toggle')
  def test_health(self):
   r=self.client.get('/health/');self.assertEqual(r.status_code,200);self.assertEqual(r.json()['status'],'ok')
  def test_api_health(self):

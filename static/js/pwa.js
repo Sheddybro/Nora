@@ -15,6 +15,18 @@
   const iosGuide = document.querySelector('[data-ios-install]');
   const iosToggle = document.querySelector('[data-ios-install-toggle]');
   const iosSteps = document.getElementById('ios-install-steps');
+  const desktopGuide = document.querySelector('[data-desktop-install]');
+  const desktopToggle = document.querySelector('[data-desktop-install-toggle]');
+  const desktopSteps = document.getElementById(desktopToggle?.getAttribute('aria-controls') || '');
+  // An installed PWA does not need installation guidance; iPadOS desktops are handled above.
+  if (desktopGuide && !isAppleMobile && !isInstalled()) {
+    desktopGuide.hidden = false;
+    desktopToggle?.addEventListener('click', () => {
+      const expanded = desktopToggle.getAttribute('aria-expanded') !== 'true';
+      desktopToggle.setAttribute('aria-expanded', String(expanded));
+      if (desktopSteps) desktopSteps.hidden = !expanded;
+    });
+  }
   if (iosGuide && isAppleMobile && !isInstalled()) {
     iosGuide.hidden = false;
     if (!isSafari) {

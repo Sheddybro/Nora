@@ -31,6 +31,13 @@
       </form>
       <a class="btn apk-download w-100 mt-3" href="https://drive.google.com/file/d/1lelNKdI5jPqGKzVvoLZc2HkiPUCiFlch/view?usp=sharing" target="_blank" rel="noopener noreferrer">Download Android APK</a>
       <button class="btn pwa-install-button w-100 mt-2" id="pwaInstallButton" type="button" hidden>Install desktop app</button>
+      <section class="desktop-install" data-desktop-install hidden aria-label="Install NorrisBeauty on a computer">
+        <button class="btn desktop-install-toggle w-100 mt-2" type="button" data-desktop-install-toggle aria-expanded="false" aria-controls="desktop-install-steps-login">Install on Windows or desktop — free</button>
+        <div class="desktop-install-steps" id="desktop-install-steps-login" hidden>
+          <p>In Chrome or Microsoft Edge, open the browser menu and choose <strong>Install NorrisBeauty</strong> or <strong>Apps → Install this site as an app</strong>, if offered.</p>
+          <p>Launch it from the Windows Start menu. Sign in online; encrypted, read-only offline catalog access can be set up later from the workspace.</p>
+        </div>
+      </section>
       <section class="ios-install" data-ios-install hidden aria-label="Install NorrisBeauty on iPhone or iPad">
         <button class="btn ios-install-toggle w-100 mt-2" type="button" data-ios-install-toggle aria-expanded="false" aria-controls="ios-install-steps">Install on iPhone or iPad — free</button>
         <div class="ios-install-steps" id="ios-install-steps" hidden>

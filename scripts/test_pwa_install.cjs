@@ -16,15 +16,32 @@ function renderInstallGuide({ userAgent, standalone = false, platform = 'iPhone'
   const message = { textContent: 'In Safari, follow these steps:' };
   const guide = { hidden: true, querySelector() { return message; } };
   const steps = { hidden: true };
+  const desktopListeners = {};
+  const desktopToggle = {
+    attributes: { 'aria-expanded': 'false', 'aria-controls': 'desktop-install-steps-login' },
+    addEventListener(event, callback) { desktopListeners[event] = callback; },
+    getAttribute(name) { return this.attributes[name]; },
+    setAttribute(name, value) { this.attributes[name] = value; },
+  };
+  const desktopGuide = { hidden: true };
+  const desktopSteps = { hidden: true };
   const document = {
     querySelectorAll() { return []; },
-    querySelector(selector) { return selector === '[data-ios-install]' ? guide : toggle; },
-    getElementById() { return steps; },
+    querySelector(selector) {
+      return {
+        '[data-ios-install]': guide,
+        '[data-ios-install-toggle]': toggle,
+        '[data-desktop-install]': desktopGuide,
+        '[data-desktop-install-toggle]': desktopToggle,
+      }[selector] || null;
+    },
+    getElementById(id) { return id === 'desktop-install-steps-login' ? desktopSteps : steps; },
   };
   const navigator = { userAgent, platform, maxTouchPoints, standalone };
   const window = { navigator, matchMedia() { return { matches: standalone }; }, addEventListener() {} };
   runInNewContext(script, { document, navigator, window, console });
-  return { guide, steps, toggle, message, click: () => listeners.click?.() };
+  return { guide, steps, toggle, message, desktopGuide, desktopSteps, desktopToggle,
+    click: () => listeners.click?.(), clickDesktop: () => desktopListeners.click?.() };
 }
 
 test('iPhone Safari shows accessible installation instructions', () => {
@@ -51,4 +68,20 @@ test('already installed iPhone app does not show install guidance', () => {
 test('Windows browser does not show iPhone guidance', () => {
   const ui = renderInstallGuide({ userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 0 });
   assert.equal(ui.guide.hidden, true);
+  assert.equal(ui.desktopGuide.hidden, false);
+  ui.clickDesktop();
+  assert.equal(ui.desktopSteps.hidden, false);
+  assert.equal(ui.desktopToggle.getAttribute('aria-expanded'), 'true');
+  ui.clickDesktop();
+  assert.equal(ui.desktopSteps.hidden, true);
+});
+
+test('installed desktop app does not show redundant installation instructions', () => {
+  const ui = renderInstallGuide({ userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 0, standalone: true });
+  assert.equal(ui.desktopGuide.hidden, true);
+});
+
+test('iPhone does not show Windows installation instructions', () => {
+  const ui = renderInstallGuide({ userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Safari/604.1' });
+  assert.equal(ui.desktopGuide.hidden, true);
 });
