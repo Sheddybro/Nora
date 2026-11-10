@@ -29,7 +29,7 @@ class FoundationTests(TestCase):
     self.assertContains(response,'/password-reset/')
     self.assertContains(response,'data-pwa-status')
     self.assertContains(response,'Install desktop app')
-    self.assertContains(response,'https://drive.google.com/file/d/1lelNKdI5jPqGKzVvoLZc2HkiPUCiFlch/view?usp=sharing')
+    self.assertContains(response,'https://github.com/Sheddybro/Nora/releases/latest/download/NorrisBeauty.apk')
     self.assertContains(response,'Download Android APK')
     self.assertContains(response,'Install on iPhone or iPad')
     self.assertContains(response,'Add to Home Screen')
