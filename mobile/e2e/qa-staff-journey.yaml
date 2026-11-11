@@ -7,6 +7,7 @@ appId: com.norrisbeauty.app
 - tapOn:
     id: "qa-login-username"
 - inputText: "android.qa.staff"
+- hideKeyboard
 - tapOn:
     id: "qa-login-password"
 - inputText: "${QA_PASSWORD}"
