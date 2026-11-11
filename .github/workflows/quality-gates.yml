@@ -70,6 +70,8 @@ jobs:
       DJANGO_DEBUG: "True"
       DJANGO_SETTINGS_MODULE: config.settings
       DJANGO_SECRET_KEY: ci-browser-only-not-for-production
+      # Playwright sync driver runs an event loop in this isolated test process. Never use in production.
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
     steps:
       - uses: actions/checkout@v4
