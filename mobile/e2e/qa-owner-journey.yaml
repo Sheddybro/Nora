@@ -9,9 +9,7 @@ appId: com.norrisbeauty.app
 - tapOn: "Password"
 - inputText: "${QA_PASSWORD}"
 - tapOn: "Sign in →"
-- assertVisible:
-    text: "A clear view of your business."
-    timeout: 30000
+- assertVisible: "A clear view of your business."
 - tapOn: "Catalog"
 - assertVisible: "Products"
 - assertVisible: "QA Rose Serum"
