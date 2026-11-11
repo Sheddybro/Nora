@@ -1,7 +1,5 @@
 # Uses CI disposable owner account and ten seeded units. Never run against production APK.
 appId: com.norrisbeauty.app
-env:
-  QA_PASSWORD: "${QA_PASSWORD}"
 ---
 - launchApp:
     clearState: true
