@@ -3,31 +3,16 @@ import { Tabs } from 'expo-router';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { tabsForRole } from '../lib/navigation';
 
 const palette = {
 	light: { background: '#FAF7F2', surface: '#FFFEFC', ink: '#302D32', muted: '#827B82', rose: '#96515E', line: '#EBE5E1' },
 	dark: { background: '#1B191E', surface: '#29262D', ink: '#F4EFF1', muted: '#B8AFB5', rose: '#D4939D', line: '#403B42' },
 };
 
-const ownerTabs = [
-	{ name: 'index', title: 'Overview', icon: '◫' },
-	{ name: 'catalog', title: 'Catalog', icon: '◇' },
-	{ name: 'pos', title: 'Sell', icon: '＋' },
-	{ name: 'inventory', title: 'Stock', icon: '▤' },
-	{ name: 'more', title: 'More', icon: '•••' },
-];
-
-const staffTabs = [
-	{ name: 'index', title: 'Today', icon: '◫' },
-	{ name: 'catalog', title: 'Catalog', icon: '◇' },
-	{ name: 'pos', title: 'Sell', icon: '＋' },
-	{ name: 'inventory', title: 'Stock', icon: '▤' },
-	{ name: 'more', title: 'More', icon: '•••' },
-];
-
 function MobileTabBar({ state, navigation, role, colors }) {
 	const insets = useSafeAreaInsets();
-	const allowed = role === 'owner' ? ownerTabs : staffTabs;
+	const allowed = tabsForRole(role);
 	const enabled = new Set(allowed.map((tab) => tab.name));
 
 	return (
