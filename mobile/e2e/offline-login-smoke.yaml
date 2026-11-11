@@ -3,6 +3,7 @@ appId: com.norrisbeauty.app
 ---
 - launchApp:
     clearState: true
+- waitForAnimationToEnd
 - assertVisible: "Sign in to your workspace"
 - assertVisible: "Username"
 - assertVisible: "Password"
