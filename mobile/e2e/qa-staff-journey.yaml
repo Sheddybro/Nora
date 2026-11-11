@@ -1,7 +1,5 @@
 # Staff must never see owner-only links. Uses local QA backend only.
 appId: com.norrisbeauty.app
-env:
-  QA_PASSWORD: "${QA_PASSWORD}"
 ---
 - launchApp:
     clearState: true
