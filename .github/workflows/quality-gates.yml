@@ -65,6 +65,10 @@ jobs:
   chromium-browser-journeys:
     name: Chromium UI journeys (isolated test database)
     runs-on: ubuntu-24.04
+    # Use the official pinned browser image to avoid Ubuntu apt mirror/DNS outages
+    # when installing Chromium system dependencies on the runner.
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-noble
     timeout-minutes: 25
     env:
       DJANGO_DEBUG: "True"
@@ -75,15 +79,10 @@ jobs:
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
+      # The pinned Playwright image provides Python, browser binaries, and libraries.
       - name: Install application and Playwright
         run: |
           python -m pip install -r requirements.txt
           python -m pip install playwright==1.58.0
-      - name: Install Chromium dependencies
-        run: python -m playwright install --with-deps chromium
       - name: Test browser login, permission gates, catalog form, checkout and sales
         run: python manage.py test browser_tests --noinput --verbosity 2
