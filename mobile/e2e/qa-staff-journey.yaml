@@ -4,9 +4,11 @@ appId: com.norrisbeauty.app
 - launchApp:
     clearState: true
 - assertVisible: "Sign in to your workspace"
-- tapOn: "Username"
+- tapOn:
+    id: "qa-login-username"
 - inputText: "android.qa.staff"
-- tapOn: "Password"
+- tapOn:
+    id: "qa-login-password"
 - inputText: "${QA_PASSWORD}"
 - hideKeyboard
 - tapOn: "Sign in →"
