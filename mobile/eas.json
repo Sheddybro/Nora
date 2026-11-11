@@ -8,6 +8,16 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://norissbeautyquest.pythonanywhere.com/api/v1"
       }
+    },
+    "qaEmulator": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:8000/api/v1",
+        "NORRIS_QA_BUILD": "1"
+      }
     }
   }
 }
