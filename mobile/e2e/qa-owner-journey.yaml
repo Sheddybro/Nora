@@ -21,7 +21,7 @@ appId: com.norrisbeauty.app
 - assertVisible: "Inventory"
 - tapOn: "Sell"
 - assertVisible: "Point of sale"
-- assertVisible: "QA Rose Serum"
+- assertVisible: "QA Rose Serum.*Standard"
 - tapOn: "More"
 - assertVisible: "Purchases & suppliers"
 - assertVisible: "Staff management"
