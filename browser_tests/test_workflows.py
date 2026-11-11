@@ -5,6 +5,7 @@ Requires playwright Python package and the Chromium browser installation.
 Never point these tests at the production PythonAnywhere site.
 """
 from decimal import Decimal
+import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
@@ -71,7 +72,7 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
 
     def test_owner_login_and_logout_through_browser(self):
         self.page.goto(self.live_server_url + "/", wait_until="domcontentloaded")
-        expect(self.page).to_have_url(lambda url: url.endswith("/login/?next=/"))
+        expect(self.page).to_have_url(re.compile(r"/login/\\?next=/$"))
         self.login("browser-owner")
         expect(self.page.locator('.workspace[data-role="owner"]')).to_be_visible()
         expect(self.page.locator('a[href="/staff/"].workspace-nav-link')).to_be_visible()
