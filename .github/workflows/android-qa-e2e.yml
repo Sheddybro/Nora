@@ -10,6 +10,7 @@ on:
       - "mobile/eas.json"
       - "mobile/app.config.js"
       - "mobile/plugins/withQaCleartext.js"
+      - "mobile/app/login.tsx"
       - "core/management/commands/seed_android_qa.py"
       - "config/android_qa_settings.py"
   workflow_dispatch:
@@ -92,44 +93,63 @@ jobs:
           console.log('QA Expo config validated (not published).');
           JS
 
-      - uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
-
-      - name: Build QA-only signed APK using Expo EAS
-        working-directory: mobile
-        shell: bash
-        run: |
-          set -euo pipefail
-          eas build --platform android --profile qaEmulator --non-interactive --wait --json > /tmp/norris-android-qa-build.json
-          node - <<'JS'
-          const fs=require('fs');
-          const value=JSON.parse(fs.readFileSync('/tmp/norris-android-qa-build.json', 'utf8'));
-          const b=Array.isArray(value)?value[0]:value;
-          if (!['finished','success','succeeded'].includes(String(b.status).toLowerCase())) throw Error('QA EAS build did not finish');
-          const url=b.artifacts?.buildUrl || b.artifacts?.applicationArchiveUrl;
-          if(!url || !/^https:\/\//.test(url)) throw Error('Missing HTTPS QA APK artifact');
-          fs.writeFileSync('/tmp/norris-android-qa-apk-url',url);
-          console.log('QA EAS build ID:', b.id);
-          JS
-          curl --fail --location --retry 4 --retry-all-errors --output /tmp/NorrisBeauty-QA.apk "$(cat /tmp/norris-android-qa-apk-url)"
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-          path=Path('/tmp/NorrisBeauty-QA.apk')
-          assert path.stat().st_size>1000000
-          with zipfile.ZipFile(path) as archive:
-              assert archive.testzip() is None
-              assert 'AndroidManifest.xml' in archive.namelist()
-          print('QA signed APK verified (bytes):',path.stat().st_size)
-          PY
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Build the isolated APK on the runner: Expo's monthly EAS quota is not required.
+      # React Native release bundling embeds EXPO_PUBLIC_API_URL at compile time.
+      - name: Prebuild QA-only native Android project
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$NORRIS_QA_ONLY" = "1"
+          test "$NORRIS_QA_BUILD" = "1"
+          test "$EXPO_PUBLIC_API_URL" = "http://10.0.2.2:8000/api/v1"
+          CI=1 npx expo prebuild --platform android --no-install --clean
+          grep -q 'usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml
+
+      - name: Build and sign temporary QA APK locally
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$NORRIS_QA_ONLY" = "1"
+          cd android
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          cd ..
+          SOURCE_APK="$(find android/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+          test -n "$SOURCE_APK"
+          test "$(stat -c '%s' "$SOURCE_APK")" -gt 1000000
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          test -x "$BUILD_TOOLS/zipalign"
+          test -x "$BUILD_TOOLS/apksigner"
+          PASS="$(openssl rand -hex 20)"
+          echo "::add-mask::$PASS"
+          keytool -genkeypair -noprompt -keystore /tmp/norris-qa-test-only.jks \
+            -alias norris-qa -keyalg RSA -keysize 2048 -validity 1 \
+            -storepass "$PASS" -keypass "$PASS" \
+            -dname 'CN=Norris QA CI,OU=Disposable,O=Test,L=Local,C=NG'
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$SOURCE_APK" /tmp/norris-qa-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks /tmp/norris-qa-test-only.jks \
+            --ks-key-alias norris-qa --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
+            --out /tmp/NorrisBeauty-QA.apk /tmp/norris-qa-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose /tmp/NorrisBeauty-QA.apk
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          path = Path('/tmp/NorrisBeauty-QA.apk')
+          assert path.stat().st_size > 1000000
+          with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert 'AndroidManifest.xml' in archive.namelist()
+          print('Locally signed, isolated QA APK verified:', path.stat().st_size, 'bytes')
+          PY
 
       - name: Install Maestro
         shell: bash
