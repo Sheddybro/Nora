@@ -35,7 +35,9 @@ jobs:
           curl -fL --retry 4 --retry-all-errors "$BASE/NorrisBeauty.apk" -o /tmp/NorrisBeauty.apk
           curl -fL --retry 4 --retry-all-errors "$BASE/NorrisBeauty.apk.sha256" -o /tmp/NorrisBeauty.apk.sha256
           cd /tmp
-          sha256sum --check NorrisBeauty.apk.sha256
+          EXPECTED="$(awk '{print $1}' NorrisBeauty.apk.sha256)"
+          ACTUAL="$(sha256sum NorrisBeauty.apk | awk '{print $1}')"
+          test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
           unzip -t NorrisBeauty.apk | tail -n 1
 
       - name: Install Maestro CLI
