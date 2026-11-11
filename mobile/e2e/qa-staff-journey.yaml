@@ -1,0 +1,30 @@
+# Staff must never see owner-only links. Uses local QA backend only.
+appId: com.norrisbeauty.app
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+# Cold boot can show an unrelated Pixel Launcher "not responding" dialog.
+- runFlow:
+    when:
+      visible: "Pixel Launcher isn't responding"
+    commands:
+      - tapOn: "Wait"
+- assertVisible: "Sign in to your workspace"
+- tapOn:
+    id: "qa-login-username"
+- inputText: "android.qa.staff"
+- hideKeyboard
+- tapOn:
+    id: "qa-login-password"
+- inputText: "${QA_PASSWORD}"
+- hideKeyboard
+- tapOn: "Sign in →"
+- assertVisible: "Your day, at a glance."
+- tapOn: "More"
+- assertVisible: "Sales history"
+- assertNotVisible: "Staff management"
+- assertNotVisible: "Purchases & suppliers"
+- assertNotVisible: "Reports & analytics"
+- tapOn: "Sign out"
+- assertVisible: "Sign in to your workspace"

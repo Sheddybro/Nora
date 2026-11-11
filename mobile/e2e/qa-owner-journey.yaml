@@ -1,0 +1,36 @@
+# Uses CI disposable owner account and ten seeded units. Never run against production APK.
+appId: com.norrisbeauty.app
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+# Cold boot can show an unrelated Pixel Launcher "not responding" dialog.
+- runFlow:
+    when:
+      visible: "Pixel Launcher isn't responding"
+    commands:
+      - tapOn: "Wait"
+- assertVisible: "Sign in to your workspace"
+- tapOn:
+    id: "qa-login-username"
+- inputText: "android.qa.owner"
+- hideKeyboard
+- tapOn:
+    id: "qa-login-password"
+- inputText: "${QA_PASSWORD}"
+- hideKeyboard
+- tapOn: "Sign in →"
+- assertVisible: "A clear view of your business."
+- tapOn: "Catalog"
+- assertVisible: "Products"
+- assertVisible: "QA Rose Serum"
+- tapOn: "Stock"
+- assertVisible: "Inventory"
+- tapOn: "Sell"
+- assertVisible: "Point of sale"
+- assertVisible: "QA Rose Serum.*Standard"
+- tapOn: "More"
+- assertVisible: "Purchases & suppliers"
+- assertVisible: "Staff management"
+- tapOn: "Sign out"
+- assertVisible: "Sign in to your workspace"
