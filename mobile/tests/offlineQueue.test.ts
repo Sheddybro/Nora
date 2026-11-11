@@ -206,4 +206,85 @@ describe('offline stock movement queue', () => {
 
     expect(storage.has(queueKey)).toBe(true);
   });
+
+  it('never sends one business account\'s offline stock changes using another account session', async () => {
+    const ownerMutation = await stockMovement();
+    const otherMutation = await stockMovement(8, 12);
+    apiRequestMock.mockResolvedValue({});
+
+    await syncQueuedMutations(session);
+
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(apiRequestMock.mock.calls[0][1].body).idempotency_key).toBe('stock-7-11');
+    expect(await getQueuedMutations(7, 11)).toEqual([]);
+    expect((await getQueuedMutations(8, 12)).map((item) => item.id)).toEqual([otherMutation.id]);
+
+    const otherSession: AuthSession = {
+      ...session,
+      user: { ...session.user, id: 8, username: 'different-owner' },
+      business: { id: 12, name: 'Second Business' },
+    };
+    await syncQueuedMutations(otherSession);
+
+    expect(apiRequestMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(apiRequestMock.mock.calls[1][1].body).idempotency_key).toBe('stock-8-12');
+    expect(await getQueuedMutations()).toEqual([]);
+    expect(ownerMutation.id).not.toBe(otherMutation.id);
+  });
+
+  it('does not submit the same queued movement twice when sync is requested concurrently', async () => {
+    await stockMovement();
+    let releaseRequest: ((value: unknown) => void) | undefined;
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { requestStarted = resolve; });
+    const response = new Promise((resolve) => { releaseRequest = resolve; });
+    apiRequestMock.mockImplementation(() => {
+      requestStarted?.();
+      return response;
+    });
+
+    const firstSync = syncQueuedMutations(session);
+    await started;
+    const secondSync = syncQueuedMutations(session);
+    await secondSync;
+
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    releaseRequest?.({});
+    await firstSync;
+
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    expect(await getQueuedMutations(session.user.id, session.business.id)).toEqual([]);
+  });
+
+  it('preserves newly queued movements while an earlier movement is being synchronized', async () => {
+    const first = await stockMovement();
+    let releaseRequest: ((value: unknown) => void) | undefined;
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { requestStarted = resolve; });
+    apiRequestMock.mockImplementationOnce(() => {
+      requestStarted?.();
+      return new Promise((resolve) => { releaseRequest = resolve; });
+    });
+
+    const syncing = syncQueuedMutations(session);
+    await started;
+    const later = await queueOfflineMutation({
+      userId: session.user.id,
+      businessId: session.business.id,
+      resource: '/inventory/movements/',
+      method: 'POST',
+      payload: { kind: 'adjustment', quantity_delta: -1 },
+      idempotencyKey: 'queued-during-sync',
+    });
+    releaseRequest?.({});
+    await syncing;
+
+    const pending = await getQueuedMutations(session.user.id, session.business.id);
+    expect(pending.map((item) => item.id)).toEqual([later.id]);
+    expect(pending.some((item) => item.id === first.id)).toBe(false);
+    apiRequestMock.mockResolvedValue({});
+    await syncQueuedMutations(session);
+    expect(apiRequestMock).toHaveBeenCalledTimes(2);
+    expect(await getQueuedMutations()).toEqual([]);
+  });
 });
