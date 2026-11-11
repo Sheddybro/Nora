@@ -1,0 +1,23 @@
+# Staff must never see owner-only links. Uses local QA backend only.
+appId: com.norrisbeauty.app
+env:
+  QA_PASSWORD: "${QA_PASSWORD}"
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Sign in to your workspace"
+- tapOn: "Username"
+- inputText: "android.qa.staff"
+- tapOn: "Password"
+- inputText: "${QA_PASSWORD}"
+- tapOn: "Sign in →"
+- assertVisible:
+    text: "Your day, at a glance."
+    timeout: 30000
+- tapOn: "More"
+- assertVisible: "Sales history"
+- assertNotVisible: "Staff management"
+- assertNotVisible: "Purchases & suppliers"
+- assertNotVisible: "Reports & analytics"
+- tapOn: "Sign out"
+- assertVisible: "Sign in to your workspace"
