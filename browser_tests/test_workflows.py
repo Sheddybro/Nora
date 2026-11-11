@@ -180,7 +180,7 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
             and response.request.method == "POST"
         ) as result:
             dialog.get_by_role("button", name="Record refund").click()
-        self.assertEqual(result.value.status, 201, result.value.text())
+        self.assertEqual(result.value.status, 201)
         expect(dialog).not_to_be_visible()
         sale.refresh_from_db()
         self.batch.refresh_from_db()
@@ -209,7 +209,7 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
             and response.request.method == "POST"
         ) as result:
             dialog.get_by_role("button", name="Save draft order").click()
-        self.assertEqual(result.value.status, 201, result.value.text())
+        self.assertEqual(result.value.status, 201)
         expect(dialog).not_to_be_visible()
         order = PurchaseOrder.objects.get(business=self.business)
         self.assertEqual(order.status, PurchaseOrder.DRAFT)
@@ -228,7 +228,7 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
             and response.request.method == "POST"
         ) as result:
             dialog.get_by_role("button", name="Add staff member").click()
-        self.assertEqual(result.value.status, 201, result.value.text())
+        self.assertEqual(result.value.status, 201)
         expect(dialog).not_to_be_visible()
         membership = Membership.objects.get(user=self.new_staff, business=self.business)
         self.assertEqual(membership.role, Membership.STAFF)
