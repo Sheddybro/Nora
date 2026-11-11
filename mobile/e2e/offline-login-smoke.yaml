@@ -1,0 +1,10 @@
+# Native startup without network access: does not authenticate or touch production records.
+appId: com.norrisbeauty.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Sign in to your workspace"
+- assertVisible: "Username"
+- assertVisible: "Password"
+- tapOn: "Sign in →"
+- assertVisible: "Enter both username and password to continue."
