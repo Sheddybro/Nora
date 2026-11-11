@@ -3,6 +3,13 @@ appId: com.norrisbeauty.app
 ---
 - launchApp:
     clearState: true
+- waitForAnimationToEnd
+# Cold boot can show an unrelated Pixel Launcher "not responding" dialog.
+- runFlow:
+    when:
+      visible: "Pixel Launcher isn't responding"
+    commands:
+      - tapOn: "Wait"
 - assertVisible: "Sign in to your workspace"
 - tapOn:
     id: "qa-login-username"
