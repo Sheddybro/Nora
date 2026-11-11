@@ -235,10 +235,16 @@ describe('offline stock movement queue', () => {
   it('does not submit the same queued movement twice when sync is requested concurrently', async () => {
     await stockMovement();
     let releaseRequest: ((value: unknown) => void) | undefined;
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { requestStarted = resolve; });
     const response = new Promise((resolve) => { releaseRequest = resolve; });
-    apiRequestMock.mockReturnValue(response);
+    apiRequestMock.mockImplementation(() => {
+      requestStarted?.();
+      return response;
+    });
 
     const firstSync = syncQueuedMutations(session);
+    await started;
     const secondSync = syncQueuedMutations(session);
     await secondSync;
 
@@ -253,9 +259,15 @@ describe('offline stock movement queue', () => {
   it('preserves newly queued movements while an earlier movement is being synchronized', async () => {
     const first = await stockMovement();
     let releaseRequest: ((value: unknown) => void) | undefined;
-    apiRequestMock.mockReturnValueOnce(new Promise((resolve) => { releaseRequest = resolve; }));
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { requestStarted = resolve; });
+    apiRequestMock.mockImplementationOnce(() => {
+      requestStarted?.();
+      return new Promise((resolve) => { releaseRequest = resolve; });
+    });
 
     const syncing = syncQueuedMutations(session);
+    await started;
     const later = await queueOfflineMutation({
       userId: session.user.id,
       businessId: session.business.id,
