@@ -84,7 +84,15 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
         self.login("browser-staff")
         expect(self.page.locator('.workspace[data-role="staff"]')).to_be_visible()
         for path in ("pos", "inventory", "sales", "products", "customers"):
-            self.page.goto(self.live_server_url + "/" + path + "/", wait_until="domcontentloaded")
+            response = self.page.goto(
+                self.live_server_url + "/" + path + "/", wait_until="domcontentloaded"
+            )
+            self.assertIsNotNone(response)
+            self.assertEqual(
+                response.status, 200,
+                f"Staff {path} unexpected status {response.status}; URL: {self.page.url}; "
+                f"page: {self.page.locator('body').inner_text()[:500]}",
+            )
             expect(self.page.locator(f'.workspace[data-page="{path}"]')).to_be_visible()
         for path in ("staff", "settings", "purchases", "reports"):
             self.page.goto(self.live_server_url + "/" + path + "/", wait_until="domcontentloaded")
