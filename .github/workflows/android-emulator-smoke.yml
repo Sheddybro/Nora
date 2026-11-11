@@ -1,0 +1,73 @@
+name: Native Android emulator smoke test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-emulator-smoke.yml"
+      - "mobile/e2e/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-emulator-smoke:
+    name: Real Android APK login UI smoke test (no credentials)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      APK_RELEASE_TAG: android-42986457113-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java for Maestro
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download known verified APK release and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/Sheddybro/Nora/releases/download/${APK_RELEASE_TAG}"
+          curl -fL --retry 4 --retry-all-errors "$BASE/NorrisBeauty.apk" -o /tmp/NorrisBeauty.apk
+          curl -fL --retry 4 --retry-all-errors "$BASE/NorrisBeauty.apk.sha256" -o /tmp/NorrisBeauty.apk.sha256
+          cd /tmp
+          EXPECTED="$(awk '{print $1}' NorrisBeauty.apk.sha256)"
+          ACTUAL="$(sha256sum NorrisBeauty.apk | awk '{print $1}')"
+          test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
+          unzip -t NorrisBeauty.apk | tail -n 1
+
+      - name: Install Maestro CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Enable KVM acceleration
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot emulator and exercise released APK sign-in screen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          script: bash mobile/e2e/run-android-smoke.sh
+
+      - name: Save Maestro diagnostics if smoke test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-smoke-diagnostics
+          path: ~/.maestro/tests
+          if-no-files-found: ignore
+          retention-days: 3

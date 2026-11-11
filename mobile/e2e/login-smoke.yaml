@@ -1,0 +1,14 @@
+# Works against the released Android APK without production account credentials.
+appId: com.norrisbeauty.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Sign in to your workspace"
+- assertVisible: "Username"
+- assertVisible: "Password"
+- tapOn: "Sign in →"
+- assertVisible: "Enter both username and password to continue."
+- tapOn: "Show password"
+- assertVisible: "Hide password"
+- tapOn: "Hide password"
+- assertVisible: "Show password"
