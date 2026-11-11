@@ -8,6 +8,7 @@ appId: com.norrisbeauty.app
 - inputText: "android.qa.owner"
 - tapOn: "Password"
 - inputText: "${QA_PASSWORD}"
+- hideKeyboard
 - tapOn: "Sign in →"
 - assertVisible: "A clear view of your business."
 - tapOn: "Catalog"
