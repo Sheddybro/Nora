@@ -1,0 +1,165 @@
+name: Authenticated Android QA journeys (isolated)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-qa-e2e.yml"
+      - "mobile/e2e/qa-*.yaml"
+      - "mobile/e2e/run-qa-journeys.sh"
+      - "mobile/eas.json"
+      - "mobile/app.config.js"
+      - "mobile/plugins/withQaCleartext.js"
+      - "core/management/commands/seed_android_qa.py"
+      - "config/android_qa_settings.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-authenticated-qa:
+    name: QA Android owner/staff journeys (never production)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NORRIS_QA_ONLY: "1"
+      DJANGO_SETTINGS_MODULE: config.android_qa_settings
+      DJANGO_DEBUG: "True"
+      DJANGO_SECRET_KEY: ci-android-qa-disposable-not-production
+      NORRIS_QA_SQLITE: /tmp/norris-android-qa-${{ github.run_id }}.sqlite3
+      NORRIS_QA_BUILD: "1"
+      EXPO_PUBLIC_API_URL: http://10.0.2.2:8000/api/v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Django dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Create disposable QA database and accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "$NORRIS_QA_SQLITE"
+          QA_PASSWORD="$(openssl rand -hex 20)"
+          echo "::add-mask::$QA_PASSWORD"
+          echo "NORRIS_QA_PASSWORD=$QA_PASSWORD" >> "$GITHUB_ENV"
+          python manage.py migrate --noinput
+          NORRIS_QA_PASSWORD="$QA_PASSWORD" python manage.py seed_android_qa
+          python manage.py check
+
+      - name: Start isolated Django API
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup python manage.py runserver 0.0.0.0:8000 --noreload > /tmp/norris-android-qa-server.log 2>&1 &
+          echo $! > /tmp/norris-android-qa-server.pid
+          for try in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health/ > /dev/null; then
+              echo "Disposable QA backend responding."
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 100 /tmp/norris-android-qa-server.log
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci --legacy-peer-deps
+
+      - name: Verify QA-only Expo config
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const c=require('./app.config.js')({config:{}}); if(c.name!=='NorrisBeauty QA' || !c.plugins.includes('./plugins/withQaCleartext')) process.exit(1)"
+          npx expo config --type public --json > /tmp/norris-android-qa-config.json
+          node - <<'JS'
+          const c=require('/tmp/norris-android-qa-config.json');
+          if (c.name !== 'NorrisBeauty QA' || c.android?.package !== 'com.norrisbeauty.app') throw Error('QA config missing expected name or package');
+          console.log('QA Expo config validated (not published).');
+          JS
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Build QA-only signed APK using Expo EAS
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile qaEmulator --non-interactive --wait --json > /tmp/norris-android-qa-build.json
+          node - <<'JS'
+          const fs=require('fs');
+          const value=JSON.parse(fs.readFileSync('/tmp/norris-android-qa-build.json', 'utf8'));
+          const b=Array.isArray(value)?value[0]:value;
+          if (!['finished','success','succeeded'].includes(String(b.status).toLowerCase())) throw Error('QA EAS build did not finish');
+          const url=b.artifacts?.buildUrl || b.artifacts?.applicationArchiveUrl;
+          if(!url || !/^https:\/\//.test(url)) throw Error('Missing HTTPS QA APK artifact');
+          fs.writeFileSync('/tmp/norris-android-qa-apk-url',url);
+          console.log('QA EAS build ID:', b.id);
+          JS
+          curl --fail --location --retry 4 --retry-all-errors --output /tmp/NorrisBeauty-QA.apk "$(cat /tmp/norris-android-qa-apk-url)"
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          path=Path('/tmp/NorrisBeauty-QA.apk')
+          assert path.stat().st_size>1000000
+          with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert 'AndroidManifest.xml' in archive.namelist()
+          print('QA signed APK verified (bytes):',path.stat().st_size)
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Maestro
+        shell: bash
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Enable KVM acceleration
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run owner and staff native emulator journeys
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          script: bash mobile/e2e/run-qa-journeys.sh
+
+      - name: Upload QA emulator diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-android-qa-diagnostics
+          path: |
+            ~/.maestro/tests
+            /tmp/norris-android-qa-server.log
+          if-no-files-found: ignore
+          retention-days: 3
