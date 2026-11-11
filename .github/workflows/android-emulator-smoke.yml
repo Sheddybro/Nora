@@ -61,11 +61,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          script: |
-            set -euo pipefail
-            adb install -r /tmp/NorrisBeauty.apk
-            adb shell pm list packages | grep 'package:com.norrisbeauty.app'
-            "$HOME/.maestro/bin/maestro" test mobile/e2e/login-smoke.yaml
+          script: bash mobile/e2e/run-android-smoke.sh
 
       - name: Save Maestro diagnostics if smoke test fails
         if: failure()
