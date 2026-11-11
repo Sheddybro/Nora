@@ -1,0 +1,29 @@
+# Uses CI disposable owner account and ten seeded units. Never run against production APK.
+appId: com.norrisbeauty.app
+env:
+  QA_PASSWORD: "${QA_PASSWORD}"
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Sign in to your workspace"
+- tapOn: "Username"
+- inputText: "android.qa.owner"
+- tapOn: "Password"
+- inputText: "${QA_PASSWORD}"
+- tapOn: "Sign in →"
+- assertVisible:
+    text: "A clear view of your business."
+    timeout: 30000
+- tapOn: "Catalog"
+- assertVisible: "Products"
+- assertVisible: "QA Rose Serum"
+- tapOn: "Stock"
+- assertVisible: "Inventory"
+- tapOn: "Sell"
+- assertVisible: "Point of sale"
+- assertVisible: "QA Rose Serum"
+- tapOn: "More"
+- assertVisible: "Purchases & suppliers"
+- assertVisible: "Staff management"
+- tapOn: "Sign out"
+- assertVisible: "Sign in to your workspace"
