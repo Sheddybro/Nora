@@ -55,7 +55,7 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
             batch_number="BROWSER-LOT", quantity_on_hand=5,
             unit_cost=Decimal("80.00"),
         )
-        self.context = self.browser.new_context()
+        self.context = self.browser.new_context(service_workers="block")
         self.page = self.context.new_page()
         self.page.set_default_timeout(12000)
 
@@ -122,7 +122,16 @@ class WorkspaceBrowserJourneys(StaticLiveServerTestCase):
         self.login("browser-owner")
         self.page.goto(self.live_server_url + "/pos/", wait_until="domcontentloaded")
         location = self.page.locator("[data-pos-location]")
-        expect(location.locator(f'option[value="{self.location.pk}"]')).to_have_count(1)
+        try:
+            expect(location.locator(f'option[value="{self.location.pk}"]')).to_have_count(1, timeout=15000)
+        except AssertionError as exc:
+            error_text = self.page.locator("[data-page-error]").inner_text()
+            response = self.page.request.get(self.live_server_url + "/api/v1/inventory/locations/")
+            self.fail(
+                f"POS location never loaded; page URL={self.page.url}; "
+                f"page error={error_text!r}; locations API status={response.status}; "
+                f"API body={response.text()[:800]!r}; original={exc}"
+            )
         location.select_option(str(self.location.pk))
         product = self.page.locator(".pos-product").filter(has_text="BROWSER-001")
         expect(product).to_be_visible()
